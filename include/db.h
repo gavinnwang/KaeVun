@@ -1,8 +1,8 @@
 #pragma once
 
+#include "error.h"
 #include "log.h"
 #include "slice.h"
-#include "status.h"
 #include "tx.h"
 #include <expected>
 #include <filesystem>
@@ -14,7 +14,7 @@ namespace kv {
 
 class DB {
 public:
-  static std::expected<std::unique_ptr<DB>, Status>
+  static std::expected<std::unique_ptr<DB>, Error>
   Open(const std::filesystem::path &path) noexcept {
     // open the file at path
     // acquire file descriptor lock
@@ -32,41 +32,39 @@ public:
     db->fd_ = open(path.c_str(), flags, mode);
     if (db->fd_ == -1) {
       LOG_ERROR("Failed to open db file");
-      return std::unexpected{Status::Error("IO error")};
+      return std::unexpected{Error{"IO error"}};
     }
     return db;
   }
 
-  std::expected<Tx, Status> Begin(bool writable) noexcept {
+  std::expected<Tx, Error> Begin(bool writable) noexcept {
     if (writable) {
       return BeginRWTx();
     }
     return BeginRTx();
   }
 
-  Status Put(const Slice &key, const Slice &value) noexcept;
-  Status Delete(const Slice &key) noexcept;
-  std::expected<std::string *, Status> Get(const Slice &key) noexcept;
+  Error Put(const Slice &key, const Slice &value) noexcept;
+  Error Delete(const Slice &key) noexcept;
+  std::expected<std::string *, Error> Get(const Slice &key) noexcept;
 
   explicit DB(const std::filesystem::path &path) noexcept : path_(path) {}
 
 private:
-  std::expected<Tx, Status> BeginRWTx() noexcept {
-    std::lock_guard metalock(metalock_);
-    Tx tx(*this);
-    if (!opened_)
-      return std::unexpected{Status::Error("DB not opened")};
-
-    return {tx};
-  }
-
-  std::expected<Tx, Status> BeginRTx() noexcept {
+  std::expected<Tx, Error> BeginRWTx() noexcept {
     std::lock_guard writerlock(writerlock_);
     std::lock_guard metalock(metalock_);
     Tx tx(*this);
     if (!opened_)
-      return std::unexpected{Status::Error("DB not opened")};
+      return std::unexpected{Error{"DB not opened"}};
+    return {tx};
+  }
 
+  std::expected<Tx, Error> BeginRTx() noexcept {
+    std::lock_guard metalock(metalock_);
+    Tx tx(*this);
+    if (!opened_)
+      return std::unexpected{Error{"DB not opened"}};
     return {tx};
   }
 
@@ -75,6 +73,7 @@ private:
   std::mutex metalock_;
   // only allow one writer to the database at a time
   std::mutex writerlock_;
+
   bool opened_{false};
   std::filesystem::path path_;
   int fd_{-1};
