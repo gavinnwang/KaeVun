@@ -1,0 +1,5 @@
+build
+.cache
+.DS_Store
+cmake-build-debug
+.idea
