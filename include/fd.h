@@ -13,7 +13,7 @@ public:
 
   [[nodiscard]] explicit Fd(int fd) noexcept : fd_(fd) {}
 
-  std::optional<Error> Close() noexcept {
+  std::optional<Error> Reset() noexcept {
     if (fd_ != -1) {
       if (::close(fd_) == -1) {
         return Error("Error releasing fd");
@@ -23,25 +23,26 @@ public:
     return std::nullopt;
   }
 
-  int GetFd() const noexcept { return fd_; }
+  [[nodiscard]] int GetFd() const noexcept { return fd_; }
 
-  bool IsValid() const noexcept { return fd_ != -1; }
+  [[nodiscard]] bool IsValid() const noexcept { return fd_ != -1; }
 
+  // move constructors
   Fd(Fd &&other) noexcept : fd_(other.fd_) { other.fd_ = -1; }
-
   Fd &operator=(Fd &&other) noexcept {
     if (this != &other) {
-      Close();
+      Reset();
       fd_ = other.fd_;
       other.fd_ = -1;
     }
     return *this;
   }
 
+  // delete the copy constructors
   Fd(const Fd &) = delete;
   Fd &operator=(const Fd &) = delete;
 
-  ~Fd() { Close(); }
+  ~Fd() { Reset(); }
 
 private:
   int fd_;

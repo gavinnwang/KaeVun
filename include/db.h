@@ -3,9 +3,12 @@
 #include "error.h"
 #include "fd.h"
 #include "log.h"
+#include "mmap.h"
 #include "os.h"
+#include "page.h"
 #include "slice.h"
 #include "tx.h"
+#include <cassert>
 #include <cstdint>
 #include <expected>
 #include <filesystem>
@@ -22,7 +25,11 @@
 namespace kv {
 
 class DB {
+  static constexpr uint64_t INIT_MMAP_SIZE = 1 << 30;
+
 public:
+  explicit DB() noexcept {}
+
   static std::expected<std::unique_ptr<DB, std::function<void(DB *)>>, Error>
   Open(const std::filesystem::path &path) noexcept {
     auto db = std::unique_ptr<DB, std::function<void(DB *)>>(
@@ -75,14 +82,35 @@ public:
     }
 
     // set up mmap
+    db->Mmap(INIT_MMAP_SIZE);
 
     // set up page pool
-    // mmap the opened .db file into a data region
     // set up freelist
     // recover
 
     db->opened_ = true;
     return db;
+  }
+
+  std::optional<Error> Put(const Slice &key, const Slice &value) noexcept;
+  std::optional<Error> Delete(const Slice &key) noexcept;
+  std::optional<Error> Get(const Slice &key, std::string *output) noexcept;
+
+  // Close the DB and release all resources
+  void Close() noexcept {
+    LOG_INFO("Closing db, releasing resources");
+    if (!opened_) {
+      LOG_INFO("DB is not opened or is already closed, no need to close");
+      return;
+    }
+    // release the mmap region to trigger the deconstructor that will unmap the
+    // region
+    mmap_handle_.Reset();
+    if (fs_.is_open()) {
+      fs_.close();
+    }
+    fd_.Reset();
+    opened_ = false;
   }
 
   std::expected<Tx, Error> Begin(bool writable) noexcept {
@@ -91,12 +119,6 @@ public:
     }
     return BeginRTx();
   }
-
-  std::optional<Error> Put(const Slice &key, const Slice &value) noexcept;
-  std::optional<Error> Delete(const Slice &key) noexcept;
-  std::optional<Error> Get(const Slice &key, std::string *output) noexcept;
-
-  explicit DB() noexcept {}
 
   std::expected<Tx, Error> BeginRWTx() noexcept {
     std::lock_guard writerlock(writerlock_);
@@ -116,18 +138,6 @@ public:
   }
 
 private:
-  bool Validate() noexcept {
-    std::vector<std::byte> buf(page_size_);
-    fs_.seekg(0, std::ios::beg);
-    fs_.read(reinterpret_cast<char *>(buf.data()), buf.size());
-    if (!fs_) {
-      LOG_ERROR("Failed to read the meta page");
-      return false;
-    }
-    Page *p = CastBuffer<Page>(buf.data(), 0);
-    return p->Meta()->Validate();
-  }
-
   void Init() noexcept {
     // init the meta page
     // first page is meta, second page is freelist
@@ -136,7 +146,7 @@ private:
     std::vector<std::byte> buf(page_size_ * 3);
 
     {
-      Page *p = CastBuffer<Page>(buf.data(), 0);
+      auto *p = GetPageFromBuffer<class Page>(buf.data(), 0);
       p->SetId(0);
       p->SetFlags(PageFlag::MetaPage);
       Meta *m = p->Meta();
@@ -151,12 +161,12 @@ private:
       m->SetChecksum(m->Sum64());
     }
     {
-      Page *p = CastBuffer<Page>(buf.data(), 1);
+      auto *p = GetPageFromBuffer<class Page>(buf.data(), 1);
       p->SetId(1);
       p->SetFlags(PageFlag::FreelistPage);
     }
     {
-      Page *p = CastBuffer<Page>(buf.data(), 2);
+      auto *p = GetPageFromBuffer<class Page>(buf.data(), 2);
       p->SetId(2);
       p->SetFlags(PageFlag::LeafPage);
     }
@@ -164,23 +174,16 @@ private:
     fs_.write(reinterpret_cast<const char *>(buf.data()), buf.size());
   }
 
-  // Close the DB and release all resources
-  void Close() noexcept {
-    LOG_INFO("Closing db, releasing resources");
-    if (!opened_) {
-      LOG_INFO("DB is not opened, no need to close");
-      return;
+  bool Validate() noexcept {
+    std::vector<std::byte> buf(page_size_);
+    fs_.seekg(0, std::ios::beg);
+    fs_.read(reinterpret_cast<char *>(buf.data()), buf.size());
+    if (!fs_) {
+      LOG_ERROR("Failed to read the meta page");
+      return false;
     }
-    // release the mmap region to trigger the deconstructor that will unmap the
-    // region
-    if (mmap_handle_) {
-      mmap_handle_.reset();
-    }
-    if (fs_.is_open()) {
-      fs_.close();
-    }
-    fd_.Close();
-    opened_ = false;
+    auto *p = GetPageFromBuffer<class Page>(buf.data(), 0);
+    return p->Meta()->Validate();
   }
 
   std::optional<Error> Mmap(uint64_t min_sz) noexcept {
@@ -201,6 +204,7 @@ private:
     auto mmap_ptr_handle = std::unique_ptr<void, std::function<void(void *)>>(
         std::move(b), [mmap_sz](void *ptr) {
           if (ptr && ptr != MAP_FAILED) {
+            LOG_INFO("Unmapping mmap region of size {}", mmap_sz);
             munmap(ptr, mmap_sz);
           }
         });
@@ -210,7 +214,10 @@ private:
     if (result == -1) {
       return Error("Mmap advise failed");
     }
-    std::byte *data = static_cast<std::byte *>(b);
+
+    mmap_sz_ = mmap_sz;
+    LOG_INFO("Successfully created mmap memory of size {}", mmap_sz_);
+
     return std::nullopt;
   }
 
@@ -238,8 +245,14 @@ private:
   }
   // cast a buffer as a page
   template <typename T>
-  [[nodiscard]] T *CastBuffer(std::byte *buffer, Pgid pgid) const noexcept {
-    return reinterpret_cast<T *>(buffer + pgid * page_size_);
+  [[nodiscard]] T *GetPageFromBuffer(std::byte *b, Pgid pgid) const noexcept {
+    return reinterpret_cast<T *>(b + pgid * page_size_);
+  }
+
+  [[nodiscard]] Page *Page(Pgid id) noexcept {
+    uint64_t pos = id * page_size_;
+    assert(pos + sizeof(class Page) <= mmap_sz_);
+    return reinterpret_cast<class Page *>(mmap_handle_.Data()[pos]);
   }
 
 private:
@@ -249,13 +262,19 @@ private:
   std::mutex writerlock_;
   // mutex to protect mmap access
   std::shared_mutex mmaplock_;
-
+  // whether the db is opened or not. Close() will only work if opened_ is true
   bool opened_{false};
+  // path of the database file
   std::filesystem::path path_{""};
+  // fstream of the database file
   std::fstream fs_;
+  // file descriptor handle
   Fd fd_;
-  std::unique_ptr<void, std::function<void(void *)>> mmap_handle_;
-
+  // mmap handle that will unmap when released
+  MmapDataHandle mmap_handle_;
+  // size of the mmap memory
+  uint64_t mmap_sz_;
+  // page size of the db
   uint32_t page_size_{OS::DEFAULT_PAGE_SIZE};
 };
 } // namespace kv

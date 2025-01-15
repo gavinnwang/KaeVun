@@ -18,11 +18,8 @@ enum class PageFlag : uint32_t {
   FreelistPage = 0x10
 };
 
-struct Page {
-  Pgid id_;
-  uint32_t flags_;
-  uint32_t count_;
-
+class Page {
+public:
   void SetId(Pgid id) noexcept { id_ = id; }
   void SetFlags(PageFlag flags) noexcept {
     flags_ = static_cast<uint32_t>(flags);
@@ -33,6 +30,11 @@ struct Page {
     auto base = reinterpret_cast<std::byte *>(this);
     return reinterpret_cast<struct Meta *>(base + sizeof(Page));
   }
+
+private:
+  Pgid id_;
+  uint32_t flags_;
+  uint32_t count_;
 };
 
 struct Meta {
