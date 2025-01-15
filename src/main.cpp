@@ -10,7 +10,7 @@ int main() {
     auto error = db_res.error();
   }
 
-  std::unique_ptr<kv::DB> db = std::move(db_res.value());
+  auto db = std::move(db_res.value());
   auto res = db->Begin(false);
 
   if (res) {

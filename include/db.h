@@ -1,6 +1,7 @@
 #pragma once
 
 #include "error.h"
+#include "fd.h"
 #include "log.h"
 #include "os.h"
 #include "slice.h"
@@ -12,6 +13,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <shared_mutex>
 #include <sys/file.h>
 #include <sys/mman.h>
@@ -21,22 +23,29 @@ namespace kv {
 
 class DB {
 public:
-  static std::expected<std::unique_ptr<DB>, Error>
+  static std::expected<std::unique_ptr<DB, std::function<void(DB *)>>, Error>
   Open(const std::filesystem::path &path) noexcept {
-    auto db = std::make_unique<DB>();
+    auto db = std::unique_ptr<DB, std::function<void(DB *)>>(
+        new DB{}, [](DB *db_ptr) {
+          if (db_ptr) {
+            db_ptr->Close();
+            delete db_ptr;
+          }
+        });
 
     int flags = (O_RDWR | O_CREAT);
     mode_t mode = 0666;
     LOG_TRACE("Opening db file: {}", path.string());
     // acquire a file descriptor
-    db->fd_ = ::open(path.c_str(), flags, mode);
-    if (db->fd_ == -1) {
+    auto fd = ::open(path.c_str(), flags, mode);
+    db->fd_ = Fd{fd};
+    if (db->fd_.GetFd() == -1) {
       LOG_ERROR("Failed to open db file");
       return std::unexpected{Error{"IO error"}};
     }
     db->path_ = path;
     // acquire file descriptor lock
-    if (::flock(db->fd_, LOCK_EX) == -1) {
+    if (::flock(db->fd_.GetFd(), LOCK_EX) == -1) {
       LOG_ERROR("Failed to lock db file");
       db->Close();
       return std::unexpected{Error{"Failed to lock db file"}};
@@ -48,7 +57,7 @@ public:
       db->Close();
       return std::unexpected{Error{"IO error"}};
     }
-    auto file_sz_or_err = GetFileSize(db->path_);
+    auto file_sz_or_err = OS::GetFileSize(db->path_);
     if (!file_sz_or_err) {
       return std::unexpected{file_sz_or_err.error()};
     }
@@ -123,7 +132,7 @@ private:
     // init the meta page
     // first page is meta, second page is freelist
     // third page is leaf
-    page_size_ = GetOSDefaultPageSize();
+    page_size_ = OS::GetOSDefaultPageSize();
     std::vector<std::byte> buf(page_size_ * 3);
 
     {
@@ -158,22 +167,24 @@ private:
   // Close the DB and release all resources
   void Close() noexcept {
     LOG_INFO("Closing db, releasing resources");
-    if (munmap(mmap_data_, ) == -1) {
-      std::perror("Error unmapping memory");
+    if (!opened_) {
+      LOG_INFO("DB is not opened, no need to close");
+      return;
+    }
+    // release the mmap region to trigger the deconstructor that will unmap the
+    // region
+    if (mmap_handle_) {
+      mmap_handle_.reset();
     }
     if (fs_.is_open()) {
       fs_.close();
     }
-    if (fd_ != -1) {
-      // this will also release the flock
-      ::close(fd_);
-      fd_ = -1;
-    }
+    fd_.Close();
     opened_ = false;
   }
 
   std::optional<Error> Mmap(uint64_t min_sz) noexcept {
-    auto file_sz_or_err = GetFileSize(path_);
+    auto file_sz_or_err = OS::GetFileSize(path_);
     if (!file_sz_or_err) {
       return file_sz_or_err.error();
     }
@@ -181,25 +192,26 @@ private:
     auto mmap_sz = MmapSize(fmax(min_sz, file_sz));
     LOG_INFO("Mmaping size {}", mmap_sz);
 
-    void *b =
-        mmap(nullptr, mmap_sz, PROT_READ | PROT_WRITE, MAP_SHARED, fd_, 0);
+    void *b = mmap(nullptr, mmap_sz, PROT_READ | PROT_WRITE, MAP_SHARED,
+                   fd_.GetFd(), 0);
     if (b == MAP_FAILED) {
       return Error("Mmap failed");
     }
 
-    auto mmap_ptr = std::unique_ptr<void, std::function<void(void *)>>(
+    auto mmap_ptr_handle = std::unique_ptr<void, std::function<void(void *)>>(
         std::move(b), [mmap_sz](void *ptr) {
           if (ptr && ptr != MAP_FAILED) {
             munmap(ptr, mmap_sz);
           }
         });
 
-    int result = madvise(mmap_ptr.get(), mmap_sz, MADV_RANDOM);
+    int result = madvise(mmap_ptr_handle.get(), mmap_sz, MADV_RANDOM);
 
     if (result == -1) {
       return Error("Mmap advise failed");
     }
     std::byte *data = static_cast<std::byte *>(b);
+    return std::nullopt;
   }
 
   [[nodiscard]] uint64_t MmapSize(uint64_t request_sz) noexcept {
@@ -241,10 +253,9 @@ private:
   bool opened_{false};
   std::filesystem::path path_{""};
   std::fstream fs_;
-  std::unique_ptr fd_{-1};
+  Fd fd_;
+  std::unique_ptr<void, std::function<void(void *)>> mmap_handle_;
 
-  void *mmap_data_;
-
-  uint32_t page_size_{DEFAULT_PAGE_SIZE};
+  uint32_t page_size_{OS::DEFAULT_PAGE_SIZE};
 };
 } // namespace kv
