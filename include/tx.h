@@ -6,6 +6,7 @@ namespace kv {
 class DB;
 
 class Tx {
+
 public:
   explicit Tx(DB &db) noexcept : db_(db) {}
 

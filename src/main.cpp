@@ -13,7 +13,7 @@ int main() {
   std::unique_ptr<kv::DB> db = std::move(db_res.value());
   auto res = db->Begin(false);
 
-  if (res.has_value()) {
+  if (res) {
     LOG_INFO("db works fine");
   } else {
     LOG_INFO("db works not fine");
