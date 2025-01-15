@@ -1,7 +1,11 @@
 #pragma once
 
 #include "log.h"
+#include <__expected/expected.h>
 #include <cstdint>
+#include <error.h>
+#include <filesystem>
+#include <system_error>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -12,7 +16,7 @@
 namespace kv {
 
 constexpr uint32_t DEFAULT_PAGE_SIZE = 4096;
-inline uint32_t GetOSDefaultPageSize() noexcept {
+uint32_t GetOSDefaultPageSize() noexcept {
 
   static const uint32_t page_size = []() noexcept -> uint32_t {
 #ifdef _WIN32
@@ -32,6 +36,16 @@ inline uint32_t GetOSDefaultPageSize() noexcept {
   LOG_INFO("OS page size: {}", page_size);
 
   return page_size;
+}
+
+static std::expected<uint64_t, Error>
+GetFileSize(const std::filesystem::path &path) noexcept {
+  std::error_code ec;
+  auto file_sz = std::filesystem::file_size(path, ec);
+  LOG_INFO("Current DB file size {}", file_sz);
+  if (ec) {
+    return std::unexpected{Error{"Failed to check for file size"}};
+  }
 }
 
 } // namespace kv

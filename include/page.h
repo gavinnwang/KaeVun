@@ -5,8 +5,11 @@
 #include <cstddef>
 #include <cstdint>
 namespace kv {
+
 constexpr uint64_t VERSION_NUMBER = 1;
+
 constexpr uint32_t MAGIC = 0xED0CDAED;
+
 enum class PageFlag : uint32_t {
   None = 0x00,
   BranchPage = 0x01,
@@ -14,6 +17,7 @@ enum class PageFlag : uint32_t {
   MetaPage = 0x04,
   FreelistPage = 0x10
 };
+
 struct Page {
   Pgid id_;
   uint32_t flags_;
@@ -66,8 +70,9 @@ struct Meta {
   }
 
   [[nodiscard]] bool Validate() {
-    LOG_INFO("Validating magic: {:02x} version: {:02x} checksum: {:02x}",
-             magic_, version_, checksum_);
+    LOG_INFO("Validating magic: {:02x} == {:02x} version: {:02x} == {:02x} "
+             "checksum: {:02x} == {:02x}",
+             magic_, MAGIC, version_, VERSION_NUMBER, checksum_, Sum64());
     return magic_ == MAGIC && version_ == VERSION_NUMBER &&
            checksum_ == Sum64();
   }
