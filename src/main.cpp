@@ -5,12 +5,14 @@
 
 int main() {
   std::cout << "Hello World" << std::endl;
-  auto db_res = kv::DB::Open("./db.db");
-  if (!db_res) {
-    auto error = db_res.error();
+  auto db_or_err = kv::DB::Open("./db.db");
+  if (!db_or_err) {
+    auto err = db_or_err.error();
+    LOG_ERROR("DB open failed: {}", err.message());
+    return 0;
   }
 
-  auto db = std::move(db_res.value());
+  auto db = std::move(*db_or_err);
   auto res = db->Begin(false);
 
   if (res) {

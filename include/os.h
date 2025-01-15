@@ -43,7 +43,7 @@ public:
   GetFileSize(const std::filesystem::path &path) noexcept {
     std::error_code ec;
     auto file_sz = std::filesystem::file_size(path, ec);
-    LOG_INFO("Current DB file size {}", file_sz);
+    LOG_INFO("Current db file size {}", file_sz);
     if (ec) {
       return std::unexpected{Error{"Failed to check for file size"}};
     }
