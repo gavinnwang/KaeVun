@@ -105,10 +105,10 @@ public:
     }
     // release the mmap region to trigger the deconstructor that will unmap the
     // region
-    mmap_handle_.Reset();
     if (fs_.is_open()) {
       fs_.close();
     }
+    mmap_handle_.Reset();
     fd_.Reset();
     opened_ = false;
   }
@@ -146,7 +146,7 @@ private:
     std::vector<std::byte> buf(page_size_ * 3);
 
     {
-      auto *p = GetPageFromBuffer<class Page>(buf.data(), 0);
+      auto *p = GetPageFromBuffer(buf.data(), 0);
       p->SetId(0);
       p->SetFlags(PageFlag::MetaPage);
       Meta *m = p->Meta();
@@ -161,12 +161,12 @@ private:
       m->SetChecksum(m->Sum64());
     }
     {
-      auto *p = GetPageFromBuffer<class Page>(buf.data(), 1);
+      auto *p = GetPageFromBuffer(buf.data(), 1);
       p->SetId(1);
       p->SetFlags(PageFlag::FreelistPage);
     }
     {
-      auto *p = GetPageFromBuffer<class Page>(buf.data(), 2);
+      auto *p = GetPageFromBuffer(buf.data(), 2);
       p->SetId(2);
       p->SetFlags(PageFlag::LeafPage);
     }
@@ -182,7 +182,7 @@ private:
       LOG_ERROR("Failed to read the meta page");
       return false;
     }
-    auto *p = GetPageFromBuffer<class Page>(buf.data(), 0);
+    auto *p = GetPageFromBuffer(buf.data(), 0);
     return p->Meta()->Validate();
   }
 
@@ -198,25 +198,23 @@ private:
     void *b = mmap(nullptr, mmap_sz, PROT_READ | PROT_WRITE, MAP_SHARED,
                    fd_.GetFd(), 0);
     if (b == MAP_FAILED) {
-      return Error("Mmap failed");
+      return Error("Failed to mmap");
     }
 
-    auto mmap_ptr_handle = std::unique_ptr<void, std::function<void(void *)>>(
-        std::move(b), [mmap_sz](void *ptr) {
-          if (ptr && ptr != MAP_FAILED) {
-            LOG_INFO("Unmapping mmap region of size {}", mmap_sz);
-            munmap(ptr, mmap_sz);
-          }
-        });
+    mmap_handle_ = MmapDataHandle{b, mmap_sz};
 
-    int result = madvise(mmap_ptr_handle.get(), mmap_sz, MADV_RANDOM);
+    int result = madvise(mmap_handle_.MmapPtr(), mmap_sz, MADV_RANDOM);
 
     if (result == -1) {
       return Error("Mmap advise failed");
     }
 
-    mmap_sz_ = mmap_sz;
-    LOG_INFO("Successfully created mmap memory of size {}", mmap_sz_);
+    LOG_INFO("Successfully created mmap memory of size {}",
+             mmap_handle_.Size());
+
+    // validate the mmap
+    auto *p = GetPage(0);
+    p->Meta()->Validate();
 
     return std::nullopt;
   }
@@ -244,15 +242,18 @@ private:
     }
   }
   // cast a buffer as a page
-  template <typename T>
-  [[nodiscard]] T *GetPageFromBuffer(std::byte *b, Pgid pgid) const noexcept {
-    return reinterpret_cast<T *>(b + pgid * page_size_);
+  [[nodiscard]] Page *GetPageFromBuffer(std::byte *b,
+                                        Pgid pgid) const noexcept {
+    return reinterpret_cast<Page *>(b + pgid * page_size_);
   }
 
-  [[nodiscard]] Page *Page(Pgid id) noexcept {
+  // gets a page from mmap
+  [[nodiscard]] Page *GetPage(Pgid id) noexcept {
     uint64_t pos = id * page_size_;
-    assert(pos + sizeof(class Page) <= mmap_sz_);
-    return reinterpret_cast<class Page *>(mmap_handle_.Data()[pos]);
+    assert(mmap_handle_.MmapPtr() != nullptr);
+    assert(pos + sizeof(Page) <= mmap_handle_.Size());
+    return reinterpret_cast<Page *>(
+        static_cast<std::byte *>(mmap_handle_.MmapPtr()) + pos);
   }
 
 private:
@@ -272,8 +273,6 @@ private:
   Fd fd_;
   // mmap handle that will unmap when released
   MmapDataHandle mmap_handle_;
-  // size of the mmap memory
-  uint64_t mmap_sz_;
   // page size of the db
   uint32_t page_size_{OS::DEFAULT_PAGE_SIZE};
 };
