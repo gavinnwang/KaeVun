@@ -82,7 +82,10 @@ public:
     }
 
     // set up mmap
-    db->Mmap(INIT_MMAP_SIZE);
+    auto err = db->Mmap(INIT_MMAP_SIZE);
+    if (err.has_value()) {
+      return std::unexpected{*err};
+    }
 
     // set up page pool
     // set up freelist
@@ -214,7 +217,9 @@ private:
 
     // validate the mmap
     auto *p = GetPage(0);
-    p->Meta()->Validate();
+    if (!p->Meta()->Validate()) {
+      return Error("Validation failed");
+    }
 
     return std::nullopt;
   }
