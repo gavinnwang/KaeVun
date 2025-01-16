@@ -6,7 +6,8 @@
 #include "mmap.h"
 #include "os.h"
 #include "page.h"
-#include "slice.h"
+// #include "slice.h"
+#include "scope.h"
 #include "tx.h"
 #include <cassert>
 #include <cstdint>
@@ -95,10 +96,6 @@ public:
     return db;
   }
 
-  std::optional<Error> Put(const Slice &key, const Slice &value) noexcept;
-  std::optional<Error> Delete(const Slice &key) noexcept;
-  std::optional<Error> Get(const Slice &key, std::string *output) noexcept;
-
   // Close the DB and release all resources
   void Close() noexcept {
     LOG_INFO("Closing db, releasing resources");
@@ -128,22 +125,52 @@ public:
     std::lock_guard metalock(metalock_);
     if (!opened_)
       return std::unexpected{Error{"DB not opened"}};
-    Tx tx{*this};
-    return {tx};
+    assert(mmap_handle_.Valid());
+    Tx tx{this, true};
+    txs.push_back(&tx);
+    rwtx_ = &tx;
+
+    // release pending freelist pages
+    return tx;
   }
 
   std::expected<Tx, Error> BeginRTx() noexcept {
     std::lock_guard metalock(metalock_);
     if (!opened_)
       return std::unexpected{Error{"DB not opened"}};
-    Tx tx{*this};
+    assert(mmap_handle_.Valid());
+    Tx tx{this, false};
     txs.push_back(&tx);
     // add read only txid to freelist
 
     std::lock_guard statslock(statslock_);
     stats_.tx_cnt_++;
     stats_.open_tx_cnt_ = txs.size();
-    return {tx};
+    return tx;
+  }
+
+  // std::optional<Error> Put(const Slice &key, const Slice &value) noexcept;
+  // std::optional<Error> Delete(const Slice &key) noexcept;
+  // std::optional<Error> Get(const Slice &key, std::string *output) noexcept;
+
+  std::optional<Error>
+  Update(const std::function<std::optional<Error>(Tx *)> &fn) noexcept {
+    auto tx_or_err = Begin(true);
+    if (!tx_or_err)
+      return tx_or_err.error();
+    auto tx = tx_or_err.value();
+
+    auto rollback_guard = Defer([&]() {
+      // make sure tx is rollback when it panics
+      tx.Rollback();
+    });
+
+    auto err_opt = fn(&tx);
+    if (err_opt) {
+      tx.Rollback();
+    }
+
+    return tx.Commit();
   }
 
 private:
@@ -227,6 +254,7 @@ private:
       return Error("Validation failed");
     }
 
+    assert(mmap_handle_.Valid());
     return std::nullopt;
   }
 
@@ -261,7 +289,7 @@ private:
   // gets a page from mmap
   [[nodiscard]] Page &GetPage(Pgid id) noexcept {
     uint64_t pos = id * page_size_;
-    assert(mmap_handle_.MmapPtr() != nullptr);
+    assert(mmap_handle_.Valid());
     assert(pos + sizeof(Page) <= mmap_handle_.Size());
     return *reinterpret_cast<Page *>(
         static_cast<std::byte *>(mmap_handle_.MmapPtr()) + pos);

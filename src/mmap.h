@@ -8,6 +8,7 @@
 
 namespace kv {
 
+// RAII wrapper for a mmap void * ptr also maintains the mmap size
 class MmapDataHandle {
 public:
   explicit MmapDataHandle() noexcept {}
@@ -42,6 +43,7 @@ public:
 
   [[nodiscard]] void *MmapPtr() const noexcept { return mmap_ptr_; }
   [[nodiscard]] uint64_t Size() const noexcept { return size_; }
+  [[nodiscard]] bool Valid() const noexcept { return mmap_ptr_ != nullptr; }
 
   void Reset() noexcept {
     Unmap();
