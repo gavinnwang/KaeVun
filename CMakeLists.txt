@@ -40,7 +40,10 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
 # Gather source files
-file(GLOB_RECURSE SOURCE_FILES "${PROJECT_SOURCE_DIR}/src/*.cpp")
+file(GLOB_RECURSE SOURCE_FILES
+    "${PROJECT_SOURCE_DIR}/src/*.cc"
+    "${PROJECT_SOURCE_DIR}/test/*.cc"
+)
 
 message(STATUS "Compiling the following source files:")
 foreach(FILE ${SOURCE_FILES})
@@ -62,4 +65,4 @@ FetchContent_MakeAvailable(fmt)
 target_link_libraries(kv_store PRIVATE fmt::fmt)
 
 # Include directory
-target_include_directories(kv_store PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_include_directories(kv_store PRIVATE "${PROJECT_SOURCE_DIR}/src")

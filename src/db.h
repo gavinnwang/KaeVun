@@ -126,7 +126,7 @@ public:
   std::expected<Tx, Error> BeginRWTx() noexcept {
     std::lock_guard writerlock(writerlock_);
     std::lock_guard metalock(metalock_);
-    Tx tx(*this);
+    Tx tx{*this};
     if (!opened_)
       return std::unexpected{Error{"DB not opened"}};
     return {tx};
@@ -134,7 +134,7 @@ public:
 
   std::expected<Tx, Error> BeginRTx() noexcept {
     std::lock_guard metalock(metalock_);
-    Tx tx(*this);
+    Tx tx{*this};
     if (!opened_)
       return std::unexpected{Error{"DB not opened"}};
     return {tx};
@@ -149,29 +149,29 @@ private:
     std::vector<std::byte> buf(page_size_ * 3);
 
     {
-      auto *p = GetPageFromBuffer(buf.data(), 0);
-      p->SetId(0);
-      p->SetFlags(PageFlag::MetaPage);
-      Meta *m = p->Meta();
-      m->SetMagic(MAGIC);
-      m->SetVersion(VERSION_NUMBER);
-      m->SetPageSize(page_size_);
-      m->SetFreelist(1);
+      auto &p = GetPageFromBuffer(buf.data(), 0);
+      p.SetId(0);
+      p.SetFlags(PageFlag::MetaPage);
+      auto &m = p.Meta();
+      m.SetMagic(MAGIC);
+      m.SetVersion(VERSION_NUMBER);
+      m.SetPageSize(page_size_);
+      m.SetFreelist(1);
       // m->setRootBucket(common::NewInBucket(3, 0));
       // first leaf page is on page 2
-      m->SetPgid(2);
-      m->SetTxid(0);
-      m->SetChecksum(m->Sum64());
+      m.SetPgid(2);
+      m.SetTxid(0);
+      m.SetChecksum(m.Sum64());
     }
     {
-      auto *p = GetPageFromBuffer(buf.data(), 1);
-      p->SetId(1);
-      p->SetFlags(PageFlag::FreelistPage);
+      auto &p = GetPageFromBuffer(buf.data(), 1);
+      p.SetId(1);
+      p.SetFlags(PageFlag::FreelistPage);
     }
     {
-      auto *p = GetPageFromBuffer(buf.data(), 2);
-      p->SetId(2);
-      p->SetFlags(PageFlag::LeafPage);
+      auto &p = GetPageFromBuffer(buf.data(), 2);
+      p.SetId(2);
+      p.SetFlags(PageFlag::LeafPage);
     }
 
     fs_.write(reinterpret_cast<const char *>(buf.data()), buf.size());
@@ -185,8 +185,8 @@ private:
       LOG_ERROR("Failed to read the meta page");
       return false;
     }
-    auto *p = GetPageFromBuffer(buf.data(), 0);
-    return p->Meta()->Validate();
+    auto &p = GetPageFromBuffer(buf.data(), 0);
+    return p.Meta().Validate();
   }
 
   std::optional<Error> Mmap(uint64_t min_sz) noexcept {
@@ -216,8 +216,8 @@ private:
              mmap_handle_.Size());
 
     // validate the mmap
-    auto *p = GetPage(0);
-    if (!p->Meta()->Validate()) {
+    auto &p = GetPage(0);
+    if (!p.Meta().Validate()) {
       return Error("Validation failed");
     }
 
@@ -247,17 +247,17 @@ private:
     }
   }
   // cast a buffer as a page
-  [[nodiscard]] Page *GetPageFromBuffer(std::byte *b,
+  [[nodiscard]] Page &GetPageFromBuffer(std::byte *b,
                                         Pgid pgid) const noexcept {
-    return reinterpret_cast<Page *>(b + pgid * page_size_);
+    return *reinterpret_cast<Page *>(b + pgid * page_size_);
   }
 
   // gets a page from mmap
-  [[nodiscard]] Page *GetPage(Pgid id) noexcept {
+  [[nodiscard]] Page &GetPage(Pgid id) noexcept {
     uint64_t pos = id * page_size_;
     assert(mmap_handle_.MmapPtr() != nullptr);
     assert(pos + sizeof(Page) <= mmap_handle_.Size());
-    return reinterpret_cast<Page *>(
+    return *reinterpret_cast<Page *>(
         static_cast<std::byte *>(mmap_handle_.MmapPtr()) + pos);
   }
 

@@ -3,12 +3,12 @@
 #include "page.h"
 #include <unordered_map>
 namespace kv {
-class DB;
 
+class DB;
 class Tx {
 
 public:
-  explicit Tx(DB &db) noexcept : db_(db) {}
+  explicit Tx(DB &db) noexcept;
 
 private:
   DB &db_;

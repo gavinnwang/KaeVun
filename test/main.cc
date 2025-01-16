@@ -1,4 +1,3 @@
-
 #include "db.h"
 #include "log.h"
 #include <iostream>

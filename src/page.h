@@ -26,9 +26,9 @@ public:
   }
   void SetCount(uint32_t count) noexcept { count_ = count; }
 
-  [[nodiscard]] struct Meta *Meta() noexcept {
+  [[nodiscard]] struct Meta &Meta() noexcept {
     auto base = reinterpret_cast<std::byte *>(this);
-    return reinterpret_cast<struct Meta *>(base + sizeof(Page));
+    return *reinterpret_cast<struct Meta *>(base + sizeof(Page));
   }
 
 private:
