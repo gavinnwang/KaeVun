@@ -16,11 +16,9 @@ public:
   [[nodiscard]] constexpr Slice(const std::byte *data, size_t size) noexcept
       : data_(data, size) {}
 
-  // allow implicit
   [[nodiscard]] Slice(const std::string &str) noexcept
       : data_(reinterpret_cast<const std::byte *>(str.data()), str.size()) {}
 
-  // allow implicit
   [[nodiscard]] Slice(const char *str) noexcept
       : data_(reinterpret_cast<const std::byte *>(str), std::strlen(str)) {}
 
@@ -42,10 +40,8 @@ public:
     return std::string(reinterpret_cast<const char *>(data()), size());
   }
 
-  // Clear the slice
   constexpr void clear() noexcept { data_ = std::span<const std::byte>{}; }
 
-  // Compare with another slice
   [[nodiscard]] int compare(const Slice &other) const noexcept {
     const size_t min_len = std::min(size(), other.size());
     int cmp = std::memcmp(data(), other.data(), min_len);
@@ -58,14 +54,12 @@ public:
     return cmp;
   }
 
-  // equality operator
   [[nodiscard]] friend constexpr bool operator==(const Slice &lhs,
                                                  const Slice &rhs) noexcept {
     return lhs.size() == rhs.size() &&
            std::memcmp(lhs.data(), rhs.data(), lhs.size()) == 0;
   }
 
-  // inequality operator
   [[nodiscard]] friend constexpr bool operator!=(const Slice &lhs,
                                                  const Slice &rhs) noexcept {
     return !(lhs == rhs);

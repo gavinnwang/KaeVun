@@ -18,7 +18,6 @@ class OS {
 public:
   static constexpr uint32_t DEFAULT_PAGE_SIZE = 4096;
   static uint32_t GetOSDefaultPageSize() noexcept {
-
     static const uint32_t page_size = []() noexcept -> uint32_t {
 #ifdef _WIN32
       SYSTEM_INFO sysInfo;

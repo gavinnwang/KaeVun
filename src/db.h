@@ -28,7 +28,7 @@ class DB {
   static constexpr uint64_t INIT_MMAP_SIZE = 1 << 30;
 
 public:
-  explicit DB() noexcept {}
+  explicit DB() noexcept = default;
 
   static std::expected<std::unique_ptr<DB, std::function<void(DB *)>>, Error>
   Open(const std::filesystem::path &path) noexcept {
@@ -40,17 +40,19 @@ public:
           }
         });
 
-    int flags = (O_RDWR | O_CREAT);
-    mode_t mode = 0666;
+    constexpr auto flags = (O_RDWR | O_CREAT);
+    constexpr auto mode = 0666;
     LOG_TRACE("Opening db file: {}", path.string());
+
     // acquire a file descriptor
     auto fd = ::open(path.c_str(), flags, mode);
-    db->fd_ = Fd{fd};
-    if (db->fd_.GetFd() == -1) {
+    if (fd == -1) {
       LOG_ERROR("Failed to open db file");
       return std::unexpected{Error{"IO error"}};
     }
+    db->fd_ = Fd{fd};
     db->path_ = path;
+
     // acquire file descriptor lock
     if (::flock(db->fd_.GetFd(), LOCK_EX) == -1) {
       LOG_ERROR("Failed to lock db file");
@@ -58,33 +60,31 @@ public:
       return std::unexpected{Error{"Failed to lock db file"}};
     }
 
+    // open fstream for io
     db->fs_.open(path, std::ios::in | std::ios::out | std::ios::binary);
     if (!db->fs_.is_open()) {
       LOG_ERROR("Failed to open db file after creation: {}", path.string());
       db->Close();
       return std::unexpected{Error{"IO error"}};
     }
-    auto file_sz_or_err = OS::GetFileSize(db->path_);
-    if (!file_sz_or_err) {
-      return std::unexpected{file_sz_or_err.error()};
-    }
-    auto file_sz = file_sz_or_err.value();
-    if (file_sz == 0) {
-      // if file size is 0, init, set up meta
-      db->Init();
-    } else {
-      // check the file to detect corruption
-      if (!db->Validate()) {
-        LOG_ERROR("Validation failed");
-        db->Close();
-        return std::unexpected{Error{"IO error"}};
+    if (auto file_sz = OS::GetFileSize(db->path_); file_sz) {
+      if (file_sz == 0) {
+        // if file size is 0, init, set up meta
+        db->Init();
+      } else {
+        // check the file to detect corruption
+        if (!db->Validate()) {
+          LOG_ERROR("Validation failed");
+          db->Close();
+          return std::unexpected{Error{"IO error"}};
+        }
       }
+    } else {
+      return std::unexpected{file_sz.error()};
     }
-
-    // set up mmap
-    auto err = db->Mmap(INIT_MMAP_SIZE);
-    if (err.has_value()) {
-      return std::unexpected{*err};
+    // set up mmap for io
+    if (auto errOpt = db->Mmap(INIT_MMAP_SIZE)) {
+      return std::unexpected{*errOpt};
     }
 
     // set up page pool
@@ -126,17 +126,23 @@ public:
   std::expected<Tx, Error> BeginRWTx() noexcept {
     std::lock_guard writerlock(writerlock_);
     std::lock_guard metalock(metalock_);
-    Tx tx{*this};
     if (!opened_)
       return std::unexpected{Error{"DB not opened"}};
+    Tx tx{*this};
     return {tx};
   }
 
   std::expected<Tx, Error> BeginRTx() noexcept {
     std::lock_guard metalock(metalock_);
-    Tx tx{*this};
     if (!opened_)
       return std::unexpected{Error{"DB not opened"}};
+    Tx tx{*this};
+    txs.push_back(&tx);
+    // add read only txid to freelist
+
+    std::lock_guard statslock(statslock_);
+    stats_.tx_cnt_++;
+    stats_.open_tx_cnt_ = txs.size();
     return {tx};
   }
 
@@ -177,7 +183,7 @@ private:
     fs_.write(reinterpret_cast<const char *>(buf.data()), buf.size());
   }
 
-  bool Validate() noexcept {
+  [[nodiscard]] bool Validate() noexcept {
     std::vector<std::byte> buf(page_size_);
     fs_.seekg(0, std::ios::beg);
     fs_.read(reinterpret_cast<char *>(buf.data()), buf.size());
@@ -189,7 +195,7 @@ private:
     return p.Meta().Validate();
   }
 
-  std::optional<Error> Mmap(uint64_t min_sz) noexcept {
+  [[nodiscard]] std::optional<Error> Mmap(uint64_t min_sz) noexcept {
     auto file_sz_or_err = OS::GetFileSize(path_);
     if (!file_sz_or_err) {
       return file_sz_or_err.error();
@@ -262,6 +268,12 @@ private:
   }
 
 private:
+  struct Stats {
+    // total number of started read tx
+    uint64_t tx_cnt_;
+    // number of currently open read transactions
+    uint64_t open_tx_cnt_;
+  };
   // mutex to protect the meta pages
   std::mutex metalock_;
   // only allow one writer to the database at a time
@@ -280,5 +292,13 @@ private:
   MmapDataHandle mmap_handle_;
   // page size of the db
   uint32_t page_size_{OS::DEFAULT_PAGE_SIZE};
+  // tracks all the txs
+  std::vector<Tx *> txs;
+  // tracking stats
+  Stats stats_;
+  // mutex to protect stats
+  std::mutex statslock_;
+  // write tx
+  Tx *rwtx_;
 };
 } // namespace kv

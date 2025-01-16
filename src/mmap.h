@@ -3,7 +3,6 @@
 #include "log.h"
 #include <cassert>
 #include <cstdint>
-#include <span>
 #include <sys/mman.h>
 #include <unistd.h>
 

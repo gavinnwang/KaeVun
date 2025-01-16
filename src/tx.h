@@ -13,5 +13,6 @@ public:
 private:
   DB &db_;
   std::unordered_map<Pgid, Page *> page_cache_{};
+  bool writable_{false};
 };
 } // namespace kv
