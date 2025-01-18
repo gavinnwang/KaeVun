@@ -26,6 +26,9 @@
 namespace kv {
 
 class DB {
+
+  friend class Tx;
+
   static constexpr uint64_t INIT_MMAP_SIZE = 1 << 30;
 
 public:
@@ -175,8 +178,10 @@ public:
 
 private:
   void Init() noexcept {
-    // init the meta page
-    // first page is meta, second page is freelist
+    // init the meta pages
+    // first page is meta
+    // second page is freelist
+    // third page is buckets page
     // third page is leaf
     page_size_ = OS::GetOSDefaultPageSize();
     std::vector<std::byte> buf(page_size_ * 3);
@@ -190,8 +195,6 @@ private:
       m.SetVersion(VERSION_NUMBER);
       m.SetPageSize(page_size_);
       m.SetFreelist(1);
-      // m->setRootBucket(common::NewInBucket(3, 0));
-      // first leaf page is on page 2
       m.SetPgid(2);
       m.SetTxid(0);
       m.SetChecksum(m.Sum64());
@@ -204,6 +207,11 @@ private:
     {
       auto &p = GetPageFromBuffer(buf.data(), 2);
       p.SetId(2);
+      p.SetFlags(PageFlag::BucketPage);
+    }
+    {
+      auto &p = GetPageFromBuffer(buf.data(), 3);
+      p.SetId(3);
       p.SetFlags(PageFlag::LeafPage);
     }
 
