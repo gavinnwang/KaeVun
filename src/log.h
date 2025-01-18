@@ -18,7 +18,12 @@ enum class LogLevel {
 };
 
 // Define the current log level
-constexpr LogLevel CURRENT_LOG_LEVEL = LogLevel::ALL;
+constexpr auto CURRENT_LOG_LEVEL = LogLevel::ALL;
+
+// Time format and output stream
+constexpr auto LOG_LOG_TIME_FORMAT = "%M:%S";
+inline auto *LOG_OUTPUT_STREAM = stdout;
+constexpr auto HEADER_LENGTH = 20;
 
 // Utility to extract the file name
 constexpr std::string_view PastLastSlash(std::string_view str,
@@ -27,6 +32,7 @@ constexpr std::string_view PastLastSlash(std::string_view str,
          : str.front() == '/' ? PastLastSlash(str.substr(1), str.substr(1))
                               : PastLastSlash(str.substr(1), last_slash);
 }
+
 constexpr std::string_view PastLastSlash(std::string_view str) {
   return PastLastSlash(str, str);
 }
@@ -37,10 +43,6 @@ constexpr std::string_view PastLastSlash(std::string_view str) {
     return sf__;                                                               \
   }())
 
-// Time format and output stream
-#define LOG_LOG_TIME_FORMAT "%M:%S"
-#define LOG_OUTPUT_STREAM stdout
-
 // For compilers which do not support __FUNCTION__
 #if !defined(__FUNCTION__) && !defined(__GNUC__)
 #define __FUNCTION__ ""
@@ -50,7 +52,6 @@ constexpr bool IsLogLevelEnabled(LogLevel level) {
   return level >= CURRENT_LOG_LEVEL;
 }
 
-constexpr int HEADER_LENGTH = 20;
 inline std::string FormatLogHeader(std::string_view file, int line,
                                    const char *func) {
   std::string full_str = fmt::format("{}:{}:{}", file, line, func);
