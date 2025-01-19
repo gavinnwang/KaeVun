@@ -10,11 +10,11 @@ public:
   explicit Cursor() = default;
 
 private:
-  struct Element {
+  struct TreeNode {
     Page *p_;
     Node *n_;
   };
-  Bucket *b_;
-  std::vector<Element> stack_;
+  BucketTx *b_;
+  std::vector<TreeNode> stack_;
 };
 } // namespace kv

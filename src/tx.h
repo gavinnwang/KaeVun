@@ -19,8 +19,8 @@ class Tx {
 public:
   Tx(const Tx &) = default;
   Tx(Tx &&) = default;
-  Tx &operator=(const Tx &) = default;
-  Tx &operator=(Tx &&) = default;
+  Tx &operator=(const Tx &) = delete;
+  Tx &operator=(Tx &&) = delete;
   explicit Tx(DB *db, bool writable) noexcept;
 
   void Rollback() noexcept { LOG_INFO("Rolling back tx"); };
@@ -28,7 +28,9 @@ public:
   [[nodiscard]] std::optional<Error> Commit() noexcept { return std::nullopt; }
 
   [[nodiscard]] std::optional<Bucket>
-  GetBucket(const std::string name) noexcept {}
+  GetBucket(const std::string &name) noexcept {
+    return buckets_.GetBucket(name);
+  }
 
   [[nodiscard]] Page &GetPage(Pgid id) noexcept;
 
@@ -43,6 +45,7 @@ private:
   std::vector<Node *> pending_;
   std::unordered_map<Pgid, Page &> page_{};
   std::unordered_map<Pgid, Node &> node_{};
+  Buckets buckets_;
   // Bucket root_;
 };
 } // namespace kv
