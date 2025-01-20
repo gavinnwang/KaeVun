@@ -8,31 +8,28 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
-#include <utility>
 
 namespace kv {
 
 class Tx;
 
+// Bucket associated with a tx
 class BucketTx {
 public:
-  explicit BucketTx(Tx *tx, const std::string *name) : tx_(tx), name_(name) {}
+  explicit BucketTx(Tx &tx, const std::string &name) : tx_(tx), name_(name) {}
 
-  [[nodiscard]] const std::string &Name() const noexcept {
-    assert(name_ != nullptr);
-    return *name_;
-  }
+  [[nodiscard]] const std::string &Name() const noexcept { return name_; }
 
-  [[nodiscard]] Tx *Transaction() const noexcept { return tx_; }
+  [[nodiscard]] Tx &Transaction() const noexcept { return tx_; }
 
 private:
-  Tx *tx_;
-  const std::string *name_;
+  Tx &tx_;
+  const std::string &name_;
 };
 
-class Bucket {
+class BucketMeta {
 public:
-  Bucket(Pgid root, uint64_t auto_id) : root_(root), auto_id_(auto_id) {}
+  BucketMeta(Pgid root, uint64_t auto_id) : root_(root), auto_id_(auto_id) {}
 
   [[nodiscard]] Pgid Root() const noexcept { return root_; }
 
@@ -50,8 +47,8 @@ public:
 
   [[nodiscard]] uint16_t Size() const noexcept { return buckets_.size(); }
 
-  [[nodiscard]] std::optional<std::reference_wrapper<Bucket>>
-  GetBucket(const std::string &name) noexcept {
+  [[nodiscard]] std::optional<std::reference_wrapper<BucketMeta>>
+  Bucket(const std::string &name) noexcept {
     if (buckets_.find(name) == buckets_.end()) {
       return std::nullopt;
     }
@@ -62,15 +59,15 @@ private:
   void Read() noexcept {
     Deserializer d(&p_);
     for (uint32_t i = 0; i < p_.Count(); i++) {
-      std::string name = d.Read<std::string>();
-      uint64_t auto_id = d.Read<uint64_t>();
-      Pgid root = d.Read<Pgid>();
+      auto name = d.Read<std::string>();
+      const auto auto_id = d.Read<uint64_t>();
+      const auto root = d.Read<Pgid>();
       assert(buckets_.find(name) == buckets_.end());
-      buckets_.emplace(std::move(name), Bucket(root, auto_id));
+      buckets_.emplace(std::move(name), BucketMeta{root, auto_id});
     }
   }
 
-  void Write() noexcept {
+  void Write() const noexcept {
     p_.SetCount(buckets_.size());
     Serializer s{&p_};
     for (const auto &[name, b] : buckets_) {
@@ -81,7 +78,7 @@ private:
   }
 
   Page &p_;
-  std::unordered_map<std::string, Bucket> buckets_{};
+  std::unordered_map<std::string, BucketMeta> buckets_{};
 };
 
 } // namespace kv
