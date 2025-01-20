@@ -23,6 +23,16 @@ public:
     return std::nullopt;
   }
 
+  std::optional<Error> Sync() const noexcept {
+    if (!IsValid()) {
+      return Error{"Invalid file descriptor"};
+    }
+    if (::fsync(fd_) == -1) {
+      return Error{"Error syncing fd"};
+    }
+    return std::nullopt;
+  }
+
   [[nodiscard]] int GetFd() const noexcept { return fd_; }
 
   [[nodiscard]] bool IsValid() const noexcept { return fd_ != -1; }

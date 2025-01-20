@@ -62,14 +62,17 @@ private:
       auto name = d.Read<std::string>();
       const auto auto_id = d.Read<uint64_t>();
       const auto root = d.Read<Pgid>();
-      assert(buckets_.find(name) == buckets_.end());
+      assert(buckets_.find(name) == buckets_.end() &&
+             "bucket names should not be duplicate");
+      ;
       buckets_.emplace(std::move(name), BucketMeta{root, auto_id});
     }
   }
 
   void Write() const noexcept {
+    p_.SetFlags(PageFlag::BucketPage);
     p_.SetCount(buckets_.size());
-    Serializer s{&p_};
+    Serializer s{p_.Data()};
     for (const auto &[name, b] : buckets_) {
       s.Write(name);
       s.Write(b.AutoId());

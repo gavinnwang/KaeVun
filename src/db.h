@@ -71,16 +71,22 @@ public:
       db->Close();
       return std::unexpected{Error{"IO error"}};
     }
-    if (auto file_sz = OS::GetFileSize(db->path_); file_sz) {
+    if (auto file_sz = OS::FileSize(db->path_); file_sz) {
       if (file_sz == 0) {
         // if file size is 0, init, set up meta
-        db->Init();
+        auto err_opt = db->Init();
+        if (err_opt.has_value()) {
+          LOG_ERROR("Init failed {}", err_opt->message());
+          db->Close();
+          return std::unexpected{*err_opt};
+        }
       } else {
         // check the file to detect corruption
-        if (!db->Validate()) {
-          LOG_ERROR("Validation failed");
+        auto err_opt = db->Validate();
+        if (err_opt.has_value()) {
+          LOG_ERROR("Validation failed {}", err_opt->message());
           db->Close();
-          return std::unexpected{Error{"IO error"}};
+          return std::unexpected{*err_opt};
         }
       }
     } else {
@@ -117,10 +123,11 @@ public:
   }
 
   std::expected<Tx, Error> Begin(bool writable) noexcept {
+    LOG_INFO("Begin new tx");
     if (writable) {
-      return BeginRWTx();
+      return BeginRTx();
     }
-    return BeginRTx();
+    return BeginRWTx();
   }
 
   std::expected<Tx, Error> BeginRWTx() noexcept {
@@ -177,14 +184,14 @@ public:
   }
 
 private:
-  void Init() noexcept {
+  std::optional<Error> Init() noexcept {
     // init the meta pages
     // first page is meta
     // second page is freelist
     // third page is buckets page
     // third page is leaf
-    page_size_ = OS::GetOSDefaultPageSize();
-    std::vector<std::byte> buf(page_size_ * 3);
+    page_size_ = OS::OSPageSize();
+    std::vector<std::byte> buf(page_size_ * 4);
 
     {
       auto &p = GetPageFromBuffer(buf.data(), 0);
@@ -216,22 +223,25 @@ private:
     }
 
     fs_.write(reinterpret_cast<const char *>(buf.data()), buf.size());
+    if (fs_.fail()) {
+      return Error{"IO Error"};
+    }
+    return fd_.Sync();
   }
 
-  [[nodiscard]] bool Validate() noexcept {
+  [[nodiscard]] std::optional<Error> Validate() noexcept {
     std::vector<std::byte> buf(page_size_);
     fs_.seekg(0, std::ios::beg);
     fs_.read(reinterpret_cast<char *>(buf.data()), buf.size());
-    if (!fs_) {
-      LOG_ERROR("Failed to read the meta page");
-      return false;
+    if (fs_.fail()) {
+      return Error{"Unable to read meta page"};
     }
     auto &p = GetPageFromBuffer(buf.data(), 0);
     return p.Meta().Validate();
   }
 
   [[nodiscard]] std::optional<Error> Mmap(uint64_t min_sz) noexcept {
-    auto file_sz_or_err = OS::GetFileSize(path_);
+    auto file_sz_or_err = OS::FileSize(path_);
     if (!file_sz_or_err) {
       return file_sz_or_err.error();
     }
@@ -258,8 +268,9 @@ private:
 
     // validate the mmap
     auto &p = GetPage(0);
-    if (!p.Meta().Validate()) {
-      return Error("Validation failed");
+    auto err_opt = p.Meta().Validate();
+    if (err_opt.has_value()) {
+      return *err_opt;
     }
 
     assert(mmap_handle_.Valid());
@@ -299,6 +310,11 @@ private:
     uint64_t pos = id * page_size_;
     assert(mmap_handle_.Valid());
     assert(pos + sizeof(Page) <= mmap_handle_.Size());
+    LOG_INFO("Accessing mmap memory address: {}",
+             static_cast<void *>(
+                 static_cast<std::byte *>(mmap_handle_.MmapPtr()) + pos));
+    return *reinterpret_cast<Page *>(
+        static_cast<std::byte *>(mmap_handle_.MmapPtr()) + pos);
     return *reinterpret_cast<Page *>(
         static_cast<std::byte *>(mmap_handle_.MmapPtr()) + pos);
   }

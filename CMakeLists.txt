@@ -42,7 +42,6 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 # Gather source files
 file(GLOB_RECURSE SOURCE_FILES
     "${PROJECT_SOURCE_DIR}/src/*.cc"
-    "${PROJECT_SOURCE_DIR}/test/*.cc"
 )
 
 message(STATUS "Compiling the following source files:")
@@ -50,7 +49,7 @@ foreach(FILE ${SOURCE_FILES})
     message(STATUS "${FILE}")
 endforeach()
 
-add_executable(kv_store ${SOURCE_FILES})
+add_library(kv ${SOURCE_FILES})
 
 # Fetch fmt from GitHub
 include(FetchContent)
@@ -59,10 +58,17 @@ FetchContent_Declare(
   GIT_REPOSITORY "https://github.com/fmtlib/fmt.git"
   GIT_TAG "10.2.1"
 )
-FetchContent_MakeAvailable(fmt)
+FetchContent_Declare(
+  googletest
+  GIT_REPOSITORY https://github.com/google/googletest.git
+  GIT_TAG v1.14.0
+)
+FetchContent_MakeAvailable(googletest fmt)
 
 # Link fmt to target
-target_link_libraries(kv_store PRIVATE fmt::fmt)
+target_link_libraries(kv PRIVATE fmt::fmt)
 
 # Include directory
-target_include_directories(kv_store PRIVATE "${PROJECT_SOURCE_DIR}/src")
+target_include_directories(kv PRIVATE "${PROJECT_SOURCE_DIR}/kv")
+
+add_subdirectory(test)

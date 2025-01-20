@@ -2,13 +2,14 @@
 #include "log.h"
 #include <iostream>
 
-int main() {
+#include "gtest/gtest.h"
+TEST(MainTest, MainTest) {
   std::cout << "Hello World" << std::endl;
   auto db_or_err = kv::DB::Open("./db.db");
   if (!db_or_err) {
     auto err = db_or_err.error();
     LOG_ERROR("DB open failed: {}", err.message());
-    return 0;
+    return;
   }
 
   auto db = std::move(*db_or_err);
@@ -19,5 +20,5 @@ int main() {
   } else {
     LOG_INFO("db works not fine");
   }
-  return 0;
+  return;
 }

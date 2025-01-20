@@ -3,10 +3,11 @@
 
 namespace kv {
 
-Tx::Tx(DB *db, bool writable) noexcept : db_(db), writable_(writable) {
+Tx::Tx(DB *db, bool writable) noexcept
+    : db_(db), writable_(writable), buckets_(Buckets{db_->GetPage(3)}) {
   // copy meta
+  // buckets page should read from the meta owned by the tx
   // get all the buckets by reading the buckets meta page
-  buckets.read(tx.page(tx.meta.buckets))
   // if writable increment the tx id in meta
 }
 

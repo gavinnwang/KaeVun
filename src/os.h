@@ -17,7 +17,7 @@ namespace kv {
 class OS {
 public:
   static constexpr uint32_t DEFAULT_PAGE_SIZE = 4096;
-  static uint32_t GetOSDefaultPageSize() noexcept {
+  static uint32_t OSPageSize() noexcept {
     static const uint32_t page_size = []() noexcept -> uint32_t {
 #ifdef _WIN32
       SYSTEM_INFO sysInfo;
@@ -39,7 +39,7 @@ public:
   }
 
   static std::expected<uint64_t, Error>
-  GetFileSize(const std::filesystem::path &path) noexcept {
+  FileSize(const std::filesystem::path &path) noexcept {
     std::error_code ec;
     auto file_sz = std::filesystem::file_size(path, ec);
     LOG_INFO("Current db file size {}", file_sz);

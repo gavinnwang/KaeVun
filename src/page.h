@@ -1,9 +1,11 @@
 #pragma once
 
+#include "error.h"
 #include "log.h"
 #include "type.h"
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 namespace kv {
 
 constexpr uint64_t VERSION_NUMBER = 1;
@@ -57,12 +59,14 @@ public:
     return hash;
   }
 
-  [[nodiscard]] bool Validate() {
-    LOG_INFO("Validating magic: {:02x} == {:02x} version: {:02x} == {:02x} "
-             "checksum: {:02x} == {:02x}",
-             magic_, MAGIC, version_, VERSION_NUMBER, checksum_, Sum64());
-    return magic_ == MAGIC && version_ == VERSION_NUMBER &&
-           checksum_ == Sum64();
+  [[nodiscard]] std::optional<Error> Validate() {
+    LOG_DEBUG("Validating magic: {:02x} == {:02x} version: {:02x} == {:02x} "
+              "checksum: {:02x} == {:02x}",
+              magic_, MAGIC, version_, VERSION_NUMBER, checksum_, Sum64());
+    if (magic_ == MAGIC && version_ == VERSION_NUMBER && checksum_ == Sum64()) {
+      return std::nullopt;
+    }
+    return Error{"Meta validation failed"};
   }
 };
 
@@ -87,7 +91,6 @@ public:
     return reinterpret_cast<T>(Data());
   }
 
-private:
   // write access to the data section
   [[nodiscard]] void *Data() noexcept {
     return reinterpret_cast<void *>(reinterpret_cast<std::byte *>(this) +

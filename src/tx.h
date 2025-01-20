@@ -54,7 +54,9 @@ public:
   }
 
 private:
-  [[nodiscard]] std::expected<Page *, Error> Allocate(uint32_t count) {}
+  [[nodiscard]] std::expected<Page *, Error> Allocate(uint32_t count) {
+    return nullptr;
+  }
 
   DB *db_;
   bool writable_{false};
