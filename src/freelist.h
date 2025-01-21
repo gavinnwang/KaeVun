@@ -2,6 +2,8 @@
 
 #include "page.h"
 #include "type.h"
+#include <cassert>
+#include <cstdint>
 #include <unordered_map>
 #include <vector>
 namespace kv {
@@ -30,6 +32,23 @@ public:
     p.SetFlags(PageFlag::FreelistPage);
     p.SetCount(ids.size());
     std::copy(ids.begin(), ids.end(), p.GetDataAs<Pgid>());
+  }
+
+  [[nodiscard]] std::optional<Pgid> Allocate(uint32_t size) const noexcept {
+    uint32_t cnt = 0;
+    Pgid prev_id = 0;
+    for (const auto id : ids_) {
+      if (prev_id == 0 || prev_id != id - 1) {
+        cnt = 1;
+      }
+      if (cnt == size) {
+        assert(id > 3);
+        return id;
+      }
+      cnt++;
+      prev_id = id;
+    }
+    return std::nullopt;
   }
 
 private:

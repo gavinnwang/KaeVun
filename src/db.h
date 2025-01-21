@@ -71,26 +71,28 @@ public:
       db->Close();
       return std::unexpected{Error{"IO error"}};
     }
-    if (auto file_sz = OS::FileSize(db->path_); file_sz) {
-      if (file_sz == 0) {
-        // if file size is 0, init, set up meta
-        auto err_opt = db->Init();
-        if (err_opt.has_value()) {
-          LOG_ERROR("Init failed {}", err_opt->message());
-          db->Close();
-          return std::unexpected{*err_opt};
-        }
-      } else {
-        // check the file to detect corruption
-        auto err_opt = db->Validate();
-        if (err_opt.has_value()) {
-          LOG_ERROR("Validation failed {}", err_opt->message());
-          db->Close();
-          return std::unexpected{*err_opt};
-        }
+    auto file_sz_or_err = OS::FileSize(db->path_);
+    if (file_sz_or_err) {
+      return std::unexpected{file_sz_or_err.error()};
+    }
+    auto file_sz = file_sz_or_err.value();
+
+    if (file_sz == 0) {
+      // if file size is 0, init, set up meta
+      auto err_opt = db->Init();
+      if (err_opt.has_value()) {
+        LOG_ERROR("Init failed {}", err_opt->message());
+        db->Close();
+        return std::unexpected{*err_opt};
       }
     } else {
-      return std::unexpected{file_sz.error()};
+      // check the file to detect corruption
+      auto err_opt = db->Validate();
+      if (err_opt.has_value()) {
+        LOG_ERROR("Validation failed {}", err_opt->message());
+        db->Close();
+        return std::unexpected{*err_opt};
+      }
     }
     // set up mmap for io
     if (auto errOpt = db->Mmap(INIT_MMAP_SIZE)) {
