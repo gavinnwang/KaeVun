@@ -74,6 +74,7 @@ public:
 
     return std::nullopt;
   }
+
   [[nodiscard]] uint64_t MmapSize(uint64_t request_sz) const noexcept {
     uint64_t step = 1 << 30; // 1GB
     if (request_sz <= step) {

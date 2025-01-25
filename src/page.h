@@ -140,31 +140,6 @@ public:
 
   ~PageBuffer() noexcept = default;
 
-  static std::expected<PageBuffer, Error> Create(std::fstream &fs,
-                                                 uint32_t offset, uint32_t size,
-                                                 uint32_t page_size) noexcept {
-    if (!fs.is_open()) {
-      return std::unexpected{Error{"Fs is not open"}};
-    }
-
-    if (!(fs.exceptions() & std::ios::goodbit)) {
-      return std::unexpected{Error{"Fs exceptions must be disabled"}};
-    }
-
-    fs.seekg(offset, std::ios::beg);
-    if (!fs) {
-      return std::unexpected{Error{"Failed to seek to the offset"}};
-    }
-
-    PageBuffer buffer(size, page_size);
-    fs.read(reinterpret_cast<char *>(buffer.buffer_.data()), size * page_size);
-    if (!fs) {
-      return std::unexpected{Error{"Failed to read data from disk"}};
-    }
-
-    return buffer;
-  }
-
   [[nodiscard]] std::vector<std::byte> &GetBuffer() noexcept { return buffer_; }
 
   // get a page from the buffer

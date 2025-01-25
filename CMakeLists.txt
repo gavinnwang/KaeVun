@@ -49,7 +49,7 @@ foreach(FILE ${SOURCE_FILES})
     message(STATUS "${FILE}")
 endforeach()
 
-add_library(kv ${SOURCE_FILES})
+# add_library(kv ${SOURCE_FILES})
 
 # Fetch fmt from GitHub
 include(FetchContent)
@@ -66,9 +66,9 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(googletest fmt)
 
 # Link fmt to target
-target_link_libraries(kv PRIVATE fmt::fmt)
+# target_link_libraries(kv PRIVATE fmt::fmt)
 
 # Include directory
-target_include_directories(kv PRIVATE "${PROJECT_SOURCE_DIR}/kv")
+# target_include_directories(kv PRIVATE "${PROJECT_SOURCE_DIR}/kv")
 
 add_subdirectory(test)

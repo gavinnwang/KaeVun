@@ -13,6 +13,6 @@ foreach(test_source ${TEST_SOURCES})
       ${PROJECT_SOURCE_DIR}/src
       ${TEST_INCLUDE_DIR}
   )
-  target_link_libraries(${test_name} PRIVATE kv gtest_main fmt::fmt)
+  target_link_libraries(${test_name} PRIVATE gtest_main fmt::fmt)
   gtest_discover_tests(${test_name})
 endforeach ()

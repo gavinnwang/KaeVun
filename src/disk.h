@@ -48,6 +48,7 @@ public:
       Close();
       return std::unexpected{Error{"IO error"}};
     }
+    fs_.exceptions(std::ios::goodbit);
 
     // set up mmap for io
     if (auto errOpt = mmap_handle_.Mmap(path_, fd_.GetFd(), INIT_MMAP_SIZE)) {
@@ -55,7 +56,7 @@ public:
     }
 
     auto file_sz_or_err = OS::FileSize(path_);
-    if (file_sz_or_err) {
+    if (!file_sz_or_err) {
       Close();
       return std::unexpected{file_sz_or_err.error()};
     }
@@ -89,7 +90,7 @@ public:
       return std::unexpected{Error{"Fs is not open"}};
     }
 
-    if (!(fs_.exceptions() & std::ios::goodbit)) {
+    if (fs_.exceptions() != std::ios::goodbit) {
       return std::unexpected{Error{"Fs exceptions must be disabled"}};
     }
 
@@ -109,7 +110,7 @@ public:
   }
 
   void Close() noexcept {
-    assert(opened_);
+    // assert(opened_);
     // release the mmap region to trigger the deconstructor that will unmap the
     // region
     if (fs_.is_open()) {
@@ -154,11 +155,12 @@ public:
     assert(p.Id() > 3);
     auto min_sz = (p.Id() + sz) * page_size_;
     if (min_sz > mmap_handle_.Size()) {
-      auto err = Mmap(min_sz);
+      auto err = mmap_handle_.Mmap(path_, fd_.GetFd(), min_sz);
       if (err) {
         return std::unexpected{*err};
       }
     }
+    return p;
 
     // // Allocate a temporary buffer for the page.
     // buf := make([]byte, count*db.pageSize)
