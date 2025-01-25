@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bucket.h"
+#include "disk.h"
 #include "error.h"
 #include "node.h"
 #include "page.h"
@@ -12,17 +13,18 @@
 #include <vector>
 namespace kv {
 
-// forward declaration
-class DB;
-
 class Tx {
 
 public:
+  explicit Tx(DiskHandler &disk, bool writable) noexcept
+      : open_(true), disk_(disk), writable_(writable),
+        buckets_(Buckets{disk_.GetPage(3)}) {};
+
   Tx(const Tx &) = default;
-  Tx(Tx &&) = default;
   Tx &operator=(const Tx &) = delete;
+
+  Tx(Tx &&) = default;
   Tx &operator=(Tx &&) = delete;
-  explicit Tx(DB *db, bool writable) noexcept;
 
   void Rollback() noexcept { LOG_INFO("Rolling back tx"); };
 
@@ -37,8 +39,8 @@ public:
 
   [[nodiscard]] std::expected<BucketMeta, Error>
   CreateBucket(const std::string &name) noexcept {
-    if (db_ == nullptr) {
-      return std::unexpected{Error{"Tx closed"}};
+    if (!open_) {
+      return std::unexpected{Error{"Tx not open"}};
     }
     if (!writable_) {
       return std::unexpected{Error{"Tx not writable"}};
@@ -53,17 +55,20 @@ public:
     return std::unexpected{Error{"Tx not writable"}};
   }
 
+  [[nodiscard]] Meta &Meta() noexcept { return meta_; }
+
 private:
   [[nodiscard]] std::expected<Page *, Error> Allocate(uint32_t count) {
     return nullptr;
   }
 
-  DB *db_;
+  bool open_{false};
+  DiskHandler &disk_;
   bool writable_{false};
   std::vector<Node *> pending_;
   std::unordered_map<Pgid, Page &> page_{};
   std::unordered_map<Pgid, Node &> node_{};
   Buckets buckets_;
-  // Bucket root_;
+  class Meta meta_;
 };
 } // namespace kv

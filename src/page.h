@@ -30,24 +30,16 @@ enum class PageFlag : uint32_t {
 };
 
 class Meta {
-private:
-  uint64_t magic_;
-  uint64_t version_;
-  uint32_t pageSize_;
-  Pgid freelist_;
-  Pgid buckets_;
-  Pgid pgid_;
-  Txid txid_;
-  uint64_t checksum_;
-
 public:
+  // get the high watermark page id
+  [[nodiscard]] Pgid GetWatermark() const noexcept { return watermark_; }
   void SetMagic(uint64_t magic) noexcept { magic_ = magic; }
   void SetVersion(uint64_t ver) noexcept { version_ = ver; }
-  void SetPageSize(uint32_t size) noexcept { pageSize_ = size; }
+  void SetPageSize(uint32_t size) noexcept { page_size_ = size; }
   void SetFreelist(Pgid f) noexcept { freelist_ = f; }
   void SetBuckets(Pgid b) noexcept { buckets_ = b; }
   void SetChecksum(uint64_t csum) noexcept { checksum_ = csum; }
-  void SetPgid(Pgid id) noexcept { pgid_ = id; }
+  void SetWatermark(Pgid id) noexcept { watermark_ = id; }
   void SetTxid(Txid tx) noexcept { txid_ = tx; }
 
   // calculate the Fowler–Noll–Vo hash of meta
@@ -76,6 +68,16 @@ public:
     }
     return Error{"Meta validation failed"};
   }
+
+private:
+  uint64_t magic_;
+  uint64_t version_;
+  uint32_t page_size_;
+  Pgid freelist_;
+  Pgid buckets_;
+  Pgid watermark_; // high watermark page id
+  Txid txid_;
+  uint64_t checksum_;
 };
 
 class Page {
@@ -122,12 +124,21 @@ private:
   uint32_t count_;
 };
 
+// an interface that defines abstract methods for accessing pages
+class PageHandler {
+public:
+  virtual ~PageHandler() noexcept = default;
+  [[nodiscard]] virtual Page &GetPage(Pgid pgid) noexcept = 0;
+};
+
 // temporary in memory page
-class PageBuffer {
+class PageBuffer final : public PageHandler {
 public:
   // construct an empty page buffer for use
   PageBuffer(uint32_t size, uint32_t page_size) noexcept
       : size_(size), page_size_(page_size), buffer_(size * page_size) {}
+
+  ~PageBuffer() noexcept = default;
 
   static std::expected<PageBuffer, Error> Create(std::fstream &fs,
                                                  uint32_t offset, uint32_t size,
@@ -154,8 +165,10 @@ public:
     return buffer;
   }
 
+  [[nodiscard]] std::vector<std::byte> &GetBuffer() noexcept { return buffer_; }
+
   // get a page from the buffer
-  [[nodiscard]] Page &GetPage(Pgid pgid) noexcept {
+  [[nodiscard]] Page &GetPage(Pgid pgid) noexcept override {
     assert(pgid < size_);
     return *reinterpret_cast<Page *>(buffer_.data() + pgid * page_size_);
   }

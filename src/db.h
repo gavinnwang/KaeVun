@@ -1,25 +1,19 @@
 #pragma once
 
+#include "disk.h"
 #include "error.h"
-#include "fd.h"
-#include "freelist.h"
 #include "log.h"
-#include "mmap.h"
-#include "os.h"
 #include "page.h"
-// #include "slice.h"
 #include "scope.h"
 #include "tx.h"
 #include <cassert>
 #include <cstdint>
 #include <expected>
 #include <filesystem>
-#include <fstream>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <shared_mutex>
 #include <sys/file.h>
 #include <sys/mman.h>
 #include <unistd.h>
@@ -28,12 +22,8 @@ namespace kv {
 
 class DB {
 
-  friend class Tx;
-
-  static constexpr uint64_t INIT_MMAP_SIZE = 1 << 30;
-
 public:
-  explicit DB() noexcept = default;
+  DB() noexcept = default;
 
   static std::expected<std::unique_ptr<DB, std::function<void(DB *)>>, Error>
   Open(const std::filesystem::path &path) noexcept {
@@ -45,37 +35,9 @@ public:
           }
         });
 
-    constexpr auto flags = (O_RDWR | O_CREAT);
-    constexpr auto mode = 0666;
-    LOG_TRACE("Opening db file: {}", path.string());
-
-    // acquire a file descriptor
-    auto fd = ::open(path.c_str(), flags, mode);
-    if (fd == -1) {
-      LOG_ERROR("Failed to open db file");
-      return std::unexpected{Error{"IO error"}};
-    }
-    db->fd_ = Fd{fd};
-    db->path_ = path;
-
-    // acquire file descriptor lock
-    if (::flock(db->fd_.GetFd(), LOCK_EX) == -1) {
-      LOG_ERROR("Failed to lock db file");
-      db->Close();
-      return std::unexpected{Error{"Failed to lock db file"}};
-    }
-
-    // open fstream for io
-    db->fs_.open(path, std::ios::in | std::ios::out | std::ios::binary);
-    if (!db->fs_.is_open()) {
-      LOG_ERROR("Failed to open db file after creation: {}", path.string());
-      db->Close();
-      return std::unexpected{Error{"IO error"}};
-    }
-    auto file_sz_or_err = OS::FileSize(db->path_);
-    if (file_sz_or_err) {
+    auto file_sz_or_err = db->disk_handler_.Open(path);
+    if (!file_sz_or_err)
       return std::unexpected{file_sz_or_err.error()};
-    }
     auto file_sz = file_sz_or_err.value();
 
     if (file_sz == 0) {
@@ -95,10 +57,6 @@ public:
         return std::unexpected{*err_opt};
       }
     }
-    // set up mmap for io
-    if (auto errOpt = db->Mmap(INIT_MMAP_SIZE)) {
-      return std::unexpected{*errOpt};
-    }
 
     // set up page pool
     // set up freelist
@@ -115,13 +73,7 @@ public:
       LOG_INFO("DB is not opened or is already closed, no need to close");
       return;
     }
-    // release the mmap region to trigger the deconstructor that will unmap the
-    // region
-    if (fs_.is_open()) {
-      fs_.close();
-    }
-    mmap_handle_.Reset();
-    fd_.Reset();
+    disk_handler_.Close();
     opened_ = false;
   }
 
@@ -138,8 +90,7 @@ public:
     std::lock_guard metalock(metalock_);
     if (!opened_)
       return std::unexpected{Error{"DB not opened"}};
-    assert(mmap_handle_.Valid());
-    Tx tx{this, true};
+    Tx tx{disk_handler_, true};
     txs.push_back(&tx);
     rwtx_ = &tx;
 
@@ -151,8 +102,7 @@ public:
     std::lock_guard metalock(metalock_);
     if (!opened_)
       return std::unexpected{Error{"DB not opened"}};
-    assert(mmap_handle_.Valid());
-    Tx tx{this, false};
+    Tx tx{disk_handler_, false};
     txs.push_back(&tx);
     // add read only txid to freelist
 
@@ -193,9 +143,7 @@ private:
     // second page is freelist
     // third page is buckets page
     // third page is leaf
-    page_size_ = OS::OSPageSize();
-    // std::vector<std::byte> buf(page_size_ * 4);
-    PageBuffer buf{4, page_size_};
+    PageBuffer buf{4, disk_handler_.PageSize()};
 
     {
       auto &p = buf.GetPage(META_PAGE_ID);
@@ -204,9 +152,9 @@ private:
       auto &m = p.Meta();
       m.SetMagic(MAGIC);
       m.SetVersion(VERSION_NUMBER);
-      m.SetPageSize(page_size_);
+      m.SetPageSize(disk_handler_.PageSize());
       m.SetFreelist(FREELIST_PAGE_ID);
-      m.SetPgid(4); // water mark?
+      m.SetWatermark(4); // water mark?
       m.SetTxid(0);
       m.SetChecksum(m.Sum64());
     }
@@ -226,129 +174,18 @@ private:
       p.SetFlags(PageFlag::LeafPage);
     }
 
-    fs_.seekp(0);
-    fs_.write(reinterpret_cast<char *>(buf.GetData().data()),
-              buf.GetData().size());
-    if (fs_.fail()) {
-      return Error{"IO Error"};
-    }
-    return fd_.Sync();
+    disk_handler_.WritePageBuffer(buf, 0);
+    return disk_handler_.Sync();
   }
 
   [[nodiscard]] std::optional<Error> Validate() noexcept {
-    std::vector<std::byte> buf(page_size_);
-    auto buf_or_err = PageBuffer::Create(fs_, 0, 1, page_size_);
+    auto buf_or_err = disk_handler_.CreatePageBufferFromDisk(0, 1);
     if (!buf_or_err) {
       return buf_or_err.error();
     }
     auto &p = buf_or_err->GetPage(0);
 
     return p.Meta().Validate();
-  }
-
-  [[nodiscard]] std::optional<Error> Mmap(uint64_t min_sz) noexcept {
-    auto file_sz_or_err = OS::FileSize(path_);
-    if (!file_sz_or_err) {
-      return file_sz_or_err.error();
-    }
-    auto file_sz = file_sz_or_err.value();
-    auto mmap_sz = MmapSize(fmax(min_sz, file_sz));
-    LOG_INFO("Mmaping size {}", mmap_sz);
-
-    void *b = mmap(nullptr, mmap_sz, PROT_READ | PROT_WRITE, MAP_SHARED,
-                   fd_.GetFd(), 0);
-    if (b == MAP_FAILED) {
-      return Error("Failed to mmap");
-    }
-
-    mmap_handle_ = MmapDataHandle{b, mmap_sz};
-
-    int result = madvise(mmap_handle_.MmapPtr(), mmap_sz, MADV_RANDOM);
-
-    if (result == -1) {
-      return Error("Mmap advise failed");
-    }
-
-    LOG_INFO("Successfully created mmap memory of size {}",
-             mmap_handle_.Size());
-
-    // validate the mmap
-    auto &p = GetPage(META_PAGE_ID);
-    auto err_opt = p.Meta().Validate();
-    if (err_opt.has_value()) {
-      return *err_opt;
-    }
-
-    assert(mmap_handle_.Valid());
-    return std::nullopt;
-  }
-
-  [[nodiscard]] uint64_t MmapSize(uint64_t request_sz) noexcept {
-    uint64_t step = 1 << 30; // 1GB
-    if (request_sz <= step) {
-      for (uint32_t i = 15; i <= 30; ++i) {
-        if (request_sz <= 1 << i) {
-          return 1 << i;
-        }
-      }
-      return step;
-    } else {
-      uint64_t sz = request_sz;
-      uint64_t remainder = request_sz % step;
-      if (step > 0)
-        sz += step - remainder;
-
-      // ensure sz is a multiple of page size
-      if (sz % page_size_ != 0) {
-        sz = ((sz / page_size_) + 1) * page_size_;
-      }
-      return sz;
-    }
-  }
-
-  // gets a page from mmap
-  [[nodiscard]] Page &GetPage(Pgid id) noexcept {
-    uint64_t pos = id * page_size_;
-    assert(mmap_handle_.Valid());
-    assert(pos + sizeof(Page) <= mmap_handle_.Size());
-    LOG_INFO("Accessing mmap memory address: {}",
-             static_cast<void *>(
-                 static_cast<std::byte *>(mmap_handle_.MmapPtr()) + pos));
-    return *reinterpret_cast<Page *>(
-        static_cast<std::byte *>(mmap_handle_.MmapPtr()) + pos);
-    return *reinterpret_cast<Page *>(
-        static_cast<std::byte *>(mmap_handle_.MmapPtr()) + pos);
-  }
-
-  [[nodiscard]] std::expected<Page *, Error> Allocate(uint32_t sz) noexcept {
-    PageBuffer buf{sz, page_size_};
-    auto &p = buf.GetPage(0);
-    p.SetOverflow(sz - 1);
-    return &p;
-
-    // // Allocate a temporary buffer for the page.
-    // buf := make([]byte, count*db.pageSize)
-    // p := (*page)(unsafe.Pointer(&buf[0]))
-    // p.overflow = uint32(count - 1)
-    //
-    // // Use pages from the freelist if they are available.
-    // if p.id = db.freelist.allocate(count); p.id != 0 {
-    // 	return p, nil
-    // }
-    //
-    // // Resize mmap() if we're at the end.
-    // p.id = db.rwtx.meta.pgid
-    // var minsz = int((p.id+pgid(count))+1) * db.pageSize
-    // if minsz >= len(db.data) {
-    // 	if err := db.mmap(minsz); err != nil {
-    // 		return nil, fmt.Errorf("mmap allocate error: %s", err)
-    // 	}
-    // }
-    //
-    // // Move the page id high water mark.
-    // db.rwtx.meta.pgid += pgid(count)
-    //
-    // return p, nil
   }
 
 private:
@@ -362,20 +199,10 @@ private:
   std::mutex metalock_;
   // only allow one writer to the database at a time
   std::mutex writerlock_;
-  // mutex to protect mmap access
-  std::shared_mutex mmaplock_;
   // whether the db is opened or not. Close() will only work if opened_ is true
   bool opened_{false};
-  // path of the database file
-  std::filesystem::path path_{""};
-  // fstream of the database file
-  std::fstream fs_;
-  // file descriptor handle
-  Fd fd_;
-  // mmap handle that will unmap when released
-  MmapDataHandle mmap_handle_;
-  // page size of the db
-  uint32_t page_size_{OS::DEFAULT_PAGE_SIZE};
+  // disk handler
+  DiskHandler disk_handler_;
   // tracks all the txs
   std::vector<Tx *> txs;
   // tracking stats
@@ -384,7 +211,7 @@ private:
   std::mutex statslock_;
   // write tx
   Tx *rwtx_;
-  // Freelist used to track reusable pages
-  Freelist freelist_;
+  // Meta
+  Meta *meta_;
 };
 } // namespace kv
