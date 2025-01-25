@@ -138,41 +138,32 @@ public:
 
 private:
   std::optional<Error> Init() noexcept {
-    // init the meta pages
-    // first page is meta
-    // second page is freelist
-    // third page is buckets page
-    // third page is leaf
     PageBuffer buf{4, disk_handler_.PageSize()};
 
-    {
-      auto &p = buf.GetPage(META_PAGE_ID);
-      p.SetId(META_PAGE_ID);
-      p.SetFlags(PageFlag::MetaPage);
-      auto &m = p.Meta();
-      m.SetMagic(MAGIC);
-      m.SetVersion(VERSION_NUMBER);
-      m.SetPageSize(disk_handler_.PageSize());
-      m.SetFreelist(FREELIST_PAGE_ID);
-      m.SetWatermark(4); // water mark?
-      m.SetTxid(0);
-      m.SetChecksum(m.Sum64());
-    }
-    {
-      auto &p = buf.GetPage(FREELIST_PAGE_ID);
-      p.SetId(FREELIST_PAGE_ID);
-      p.SetFlags(PageFlag::FreelistPage);
-    }
-    {
-      auto &p = buf.GetPage(BUCKET_PAGE_ID);
-      p.SetId(BUCKET_PAGE_ID);
-      p.SetFlags(PageFlag::BucketPage);
-    }
-    {
-      auto &p = buf.GetPage(3);
-      p.SetId(3);
-      p.SetFlags(PageFlag::LeafPage);
-    }
+    auto &meta_p = buf.GetPage(META_PAGE_ID);
+    meta_p.SetId(META_PAGE_ID);
+    meta_p.SetFlags(PageFlag::MetaPage);
+
+    auto &m = meta_p.Meta();
+    m.SetMagic(MAGIC);
+    m.SetVersion(VERSION_NUMBER);
+    m.SetPageSize(disk_handler_.PageSize());
+    m.SetFreelist(FREELIST_PAGE_ID);
+    m.SetWatermark(4); // water mark?
+    m.SetTxid(0);
+    m.SetChecksum(m.Sum64());
+
+    auto &freelist_p = buf.GetPage(FREELIST_PAGE_ID);
+    freelist_p.SetId(FREELIST_PAGE_ID);
+    freelist_p.SetFlags(PageFlag::FreelistPage);
+
+    auto &bucket_p = buf.GetPage(BUCKET_PAGE_ID);
+    bucket_p.SetId(BUCKET_PAGE_ID);
+    bucket_p.SetFlags(PageFlag::BucketPage);
+
+    auto &leaf_p = buf.GetPage(3);
+    leaf_p.SetId(3);
+    leaf_p.SetFlags(PageFlag::LeafPage);
 
     disk_handler_.WritePageBuffer(buf, 0);
     return disk_handler_.Sync();
