@@ -2,6 +2,7 @@
 
 #include "page.h"
 #include "type.h"
+#include <algorithm>
 #include <cassert>
 #include <cstdint>
 #include <unordered_map>
@@ -23,7 +24,7 @@ public:
     if (p.Count() == 0) {
       return;
     }
-    auto *ids = reinterpret_cast<Pgid *>(&p);
+    auto *ids = p.GetDataAs<Pgid>();
     ids_ = std::vector<Pgid>(ids, ids + p.Count());
   }
 
@@ -49,6 +50,21 @@ public:
       prev_id = id;
     }
     return std::nullopt;
+  }
+
+  void Free(Txid txid, Page &p) noexcept {
+    assert(p.Id() > 3);
+    for (Pgid i = p.Id(); i <= p.Id() + p.Overflow(); ++i) {
+      pending_[txid].push_back(i);
+    }
+  }
+
+  void Release(Txid txid) noexcept {
+    for (const auto id : pending_[txid]) {
+      ids_.push_back(id);
+    }
+    pending_.erase(txid);
+    std::sort(ids_.begin(), ids_.end());
   }
 
 private:

@@ -64,7 +64,6 @@ private:
       const auto root = d.Read<Pgid>();
       assert(buckets_.find(name) == buckets_.end() &&
              "bucket names should not be duplicate");
-      ;
       buckets_.emplace(std::move(name), BucketMeta{root, auto_id});
     }
   }

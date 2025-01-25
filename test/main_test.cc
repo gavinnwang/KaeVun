@@ -3,6 +3,7 @@
 #include <iostream>
 
 #include "gtest/gtest.h"
+namespace test {
 TEST(MainTest, MainTest) {
   std::cout << "Hello World" << std::endl;
   auto db_or_err = kv::DB::Open("./db.db");
@@ -22,3 +23,4 @@ TEST(MainTest, MainTest) {
   }
   return;
 }
+} // namespace test

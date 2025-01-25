@@ -2,6 +2,7 @@
 
 #include "error.h"
 #include "fd.h"
+#include "freelist.h"
 #include "log.h"
 #include "mmap.h"
 #include "os.h"
@@ -193,38 +194,41 @@ private:
     // third page is buckets page
     // third page is leaf
     page_size_ = OS::OSPageSize();
-    std::vector<std::byte> buf(page_size_ * 4);
+    // std::vector<std::byte> buf(page_size_ * 4);
+    PageBuffer buf{4, page_size_};
 
     {
-      auto &p = GetPageFromBuffer(buf.data(), 0);
-      p.SetId(0);
+      auto &p = buf.GetPage(META_PAGE_ID);
+      p.SetId(META_PAGE_ID);
       p.SetFlags(PageFlag::MetaPage);
       auto &m = p.Meta();
       m.SetMagic(MAGIC);
       m.SetVersion(VERSION_NUMBER);
       m.SetPageSize(page_size_);
-      m.SetFreelist(1);
-      m.SetPgid(2);
+      m.SetFreelist(FREELIST_PAGE_ID);
+      m.SetPgid(4); // water mark?
       m.SetTxid(0);
       m.SetChecksum(m.Sum64());
     }
     {
-      auto &p = GetPageFromBuffer(buf.data(), 1);
-      p.SetId(1);
+      auto &p = buf.GetPage(FREELIST_PAGE_ID);
+      p.SetId(FREELIST_PAGE_ID);
       p.SetFlags(PageFlag::FreelistPage);
     }
     {
-      auto &p = GetPageFromBuffer(buf.data(), 2);
-      p.SetId(2);
+      auto &p = buf.GetPage(BUCKET_PAGE_ID);
+      p.SetId(BUCKET_PAGE_ID);
       p.SetFlags(PageFlag::BucketPage);
     }
     {
-      auto &p = GetPageFromBuffer(buf.data(), 3);
+      auto &p = buf.GetPage(3);
       p.SetId(3);
       p.SetFlags(PageFlag::LeafPage);
     }
 
-    fs_.write(reinterpret_cast<const char *>(buf.data()), buf.size());
+    fs_.seekp(0);
+    fs_.write(reinterpret_cast<char *>(buf.GetData().data()),
+              buf.GetData().size());
     if (fs_.fail()) {
       return Error{"IO Error"};
     }
@@ -233,12 +237,12 @@ private:
 
   [[nodiscard]] std::optional<Error> Validate() noexcept {
     std::vector<std::byte> buf(page_size_);
-    fs_.seekg(0, std::ios::beg);
-    fs_.read(reinterpret_cast<char *>(buf.data()), buf.size());
-    if (fs_.fail()) {
-      return Error{"Unable to read meta page"};
+    auto buf_or_err = PageBuffer::Create(fs_, 0, 1, page_size_);
+    if (!buf_or_err) {
+      return buf_or_err.error();
     }
-    auto &p = GetPageFromBuffer(buf.data(), 0);
+    auto &p = buf_or_err->GetPage(0);
+
     return p.Meta().Validate();
   }
 
@@ -269,7 +273,7 @@ private:
              mmap_handle_.Size());
 
     // validate the mmap
-    auto &p = GetPage(0);
+    auto &p = GetPage(META_PAGE_ID);
     auto err_opt = p.Meta().Validate();
     if (err_opt.has_value()) {
       return *err_opt;
@@ -301,11 +305,6 @@ private:
       return sz;
     }
   }
-  // cast a buffer as a page
-  [[nodiscard]] Page &GetPageFromBuffer(std::byte *b,
-                                        Pgid pgid) const noexcept {
-    return *reinterpret_cast<Page *>(b + pgid * page_size_);
-  }
 
   // gets a page from mmap
   [[nodiscard]] Page &GetPage(Pgid id) noexcept {
@@ -319,6 +318,37 @@ private:
         static_cast<std::byte *>(mmap_handle_.MmapPtr()) + pos);
     return *reinterpret_cast<Page *>(
         static_cast<std::byte *>(mmap_handle_.MmapPtr()) + pos);
+  }
+
+  [[nodiscard]] std::expected<Page *, Error> Allocate(uint32_t sz) noexcept {
+    PageBuffer buf{sz, page_size_};
+    auto &p = buf.GetPage(0);
+    p.SetOverflow(sz - 1);
+    return &p;
+
+    // // Allocate a temporary buffer for the page.
+    // buf := make([]byte, count*db.pageSize)
+    // p := (*page)(unsafe.Pointer(&buf[0]))
+    // p.overflow = uint32(count - 1)
+    //
+    // // Use pages from the freelist if they are available.
+    // if p.id = db.freelist.allocate(count); p.id != 0 {
+    // 	return p, nil
+    // }
+    //
+    // // Resize mmap() if we're at the end.
+    // p.id = db.rwtx.meta.pgid
+    // var minsz = int((p.id+pgid(count))+1) * db.pageSize
+    // if minsz >= len(db.data) {
+    // 	if err := db.mmap(minsz); err != nil {
+    // 		return nil, fmt.Errorf("mmap allocate error: %s", err)
+    // 	}
+    // }
+    //
+    // // Move the page id high water mark.
+    // db.rwtx.meta.pgid += pgid(count)
+    //
+    // return p, nil
   }
 
 private:
@@ -354,5 +384,7 @@ private:
   std::mutex statslock_;
   // write tx
   Tx *rwtx_;
+  // Freelist used to track reusable pages
+  Freelist freelist_;
 };
 } // namespace kv

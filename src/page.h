@@ -3,14 +3,22 @@
 #include "error.h"
 #include "log.h"
 #include "type.h"
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <expected>
+#include <fstream>
 #include <optional>
+#include <vector>
 namespace kv {
 
 constexpr uint64_t VERSION_NUMBER = 1;
 
 constexpr uint32_t MAGIC = 0xED0CDAED;
+
+constexpr Pgid META_PAGE_ID = 0;
+constexpr Pgid FREELIST_PAGE_ID = 1;
+constexpr Pgid BUCKET_PAGE_ID = 2;
 
 enum class PageFlag : uint32_t {
   None = 0x00,
@@ -79,16 +87,20 @@ public:
     flags_ = static_cast<uint32_t>(flags);
   }
   void SetCount(uint32_t count) noexcept { count_ = count; }
+  void SetOverflow(uint32_t overflow) noexcept { overflow_ = overflow; }
 
   [[nodiscard]] Meta &Meta() noexcept {
     auto base = reinterpret_cast<std::byte *>(this);
     return *reinterpret_cast<class Meta *>(base + sizeof(Page));
   }
+
   [[nodiscard]] uint32_t Count() const noexcept { return count_; }
   [[nodiscard]] uint32_t Flags() const noexcept { return flags_; }
+  [[nodiscard]] Pgid Id() const noexcept { return id_; }
+  [[nodiscard]] uint32_t Overflow() const noexcept { return overflow_; }
 
   template <typename T> [[nodiscard]] T *GetDataAs() noexcept {
-    return reinterpret_cast<T>(Data());
+    return reinterpret_cast<T *>(Data());
   }
 
   // write access to the data section
@@ -106,7 +118,54 @@ public:
 private:
   Pgid id_;
   uint32_t flags_;
+  uint32_t overflow_;
   uint32_t count_;
+};
+
+// temporary in memory page
+class PageBuffer {
+public:
+  // construct an empty page buffer for use
+  PageBuffer(uint32_t size, uint32_t page_size) noexcept
+      : size_(size), page_size_(page_size), buffer_(size * page_size) {}
+
+  static std::expected<PageBuffer, Error> Create(std::fstream &fs,
+                                                 uint32_t offset, uint32_t size,
+                                                 uint32_t page_size) noexcept {
+    if (!fs.is_open()) {
+      return std::unexpected{Error{"Fs is not open"}};
+    }
+
+    if (!(fs.exceptions() & std::ios::goodbit)) {
+      return std::unexpected{Error{"Fs exceptions must be disabled"}};
+    }
+
+    fs.seekg(offset, std::ios::beg);
+    if (!fs) {
+      return std::unexpected{Error{"Failed to seek to the offset"}};
+    }
+
+    PageBuffer buffer(size, page_size);
+    fs.read(reinterpret_cast<char *>(buffer.buffer_.data()), size * page_size);
+    if (!fs) {
+      return std::unexpected{Error{"Failed to read data from disk"}};
+    }
+
+    return buffer;
+  }
+
+  // get a page from the buffer
+  [[nodiscard]] Page &GetPage(Pgid pgid) noexcept {
+    assert(pgid < size_);
+    return *reinterpret_cast<Page *>(buffer_.data() + pgid * page_size_);
+  }
+
+  [[nodiscard]] std::vector<std::byte> &GetData() noexcept { return buffer_; }
+
+private:
+  uint32_t size_;
+  uint32_t page_size_;
+  std::vector<std::byte> buffer_;
 };
 
 } // namespace kv
