@@ -147,7 +147,7 @@ public:
 
     auto id_opt = freelist_.Allocate(sz);
     // valid allocation
-    if (id_opt) {
+    if (id_opt.has_value()) {
       return p;
     }
 
@@ -161,30 +161,6 @@ public:
       }
     }
     return p;
-
-    // // Allocate a temporary buffer for the page.
-    // buf := make([]byte, count*db.pageSize)
-    // p := (*page)(unsafe.Pointer(&buf[0]))
-    // p.overflow = uint32(count - 1)
-    //
-    // // Use pages from the freelist if they are available.
-    // if p.id = db.freelist.allocate(count); p.id != 0 {
-    // 	return p, nil
-    // }
-    //
-    // // Resize mmap() if we're at the end.
-    // p.id = db.rwtx.meta.pgid
-    // var minsz = int((p.id+pgid(count))+1) * db.pageSize
-    // if minsz >= len(db.data) {
-    // 	if err := db.mmap(minsz); err != nil {
-    // 		return nil, fmt.Errorf("mmap allocate error: %s", err)
-    // 	}
-    // }
-    //
-    // // Move the page id high water mark.
-    // db.rwtx.meta.pgid += pgid(count)
-    //
-    // return p, nil
   }
 
 private:

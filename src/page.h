@@ -7,7 +7,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
-#include <fstream>
 #include <optional>
 #include <vector>
 namespace kv {

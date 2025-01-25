@@ -55,7 +55,7 @@ public:
     return std::unexpected{Error{"Tx not writable"}};
   }
 
-  [[nodiscard]] Meta &Meta() noexcept { return meta_; }
+  [[nodiscard]] Meta &GetMeta() noexcept { return meta_; }
 
 private:
   [[nodiscard]] std::expected<Page *, Error> Allocate(uint32_t count) {
@@ -69,6 +69,6 @@ private:
   std::unordered_map<Pgid, Page &> page_{};
   std::unordered_map<Pgid, Node &> node_{};
   Buckets buckets_;
-  class Meta meta_;
+  Meta meta_;
 };
 } // namespace kv
