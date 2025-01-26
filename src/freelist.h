@@ -35,7 +35,7 @@ public:
     std::copy(ids.begin(), ids.end(), p.GetDataAs<Pgid>());
   }
 
-  [[nodiscard]] std::optional<Pgid> Allocate(uint32_t size) noexcept {
+  [[nodiscard]] std::optional<Pgid> Allocate(uint32_t count) noexcept {
     // the count of ids in the current continuous segment
     uint32_t cnt = 0;
     Pgid prev_id = 0;
@@ -46,7 +46,7 @@ public:
         cnt = 0;
       }
       cnt++;
-      if (cnt == size) {
+      if (cnt == count) {
         assert(id > 3);
         // remove the segment from ids
         ids_.erase(ids_.begin() + i - cnt + 1, ids_.begin() + i + 1);

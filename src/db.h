@@ -144,7 +144,7 @@ private:
     meta_p.SetId(META_PAGE_ID);
     meta_p.SetFlags(PageFlag::MetaPage);
 
-    auto &m = meta_p.Meta();
+    auto &m = *meta_p.GetDataAs<Meta>();
     m.SetMagic(MAGIC);
     m.SetVersion(VERSION_NUMBER);
     m.SetPageSize(disk_handler_.PageSize());
@@ -176,7 +176,7 @@ private:
     }
     auto &p = buf_or_err->GetPage(0);
 
-    return p.Meta().Validate();
+    return p.GetDataAs<Meta>()->Validate();
   }
 
 private:

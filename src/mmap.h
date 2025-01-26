@@ -55,6 +55,8 @@ public:
     auto mmap_sz = MmapSize(fmax(min_sz, file_sz));
     LOG_INFO("Mmaping size {}", mmap_sz);
 
+    // deference all existing mmap reference which are the nodes
+
     Unmap(); // unmap previous before mmpaing
 
     void *b = mmap(nullptr, mmap_sz, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);

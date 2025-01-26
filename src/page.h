@@ -58,7 +58,7 @@ public:
     return hash;
   }
 
-  [[nodiscard]] std::optional<Error> Validate() {
+  [[nodiscard]] std::optional<Error> Validate() const noexcept {
     LOG_DEBUG("Validating magic: {:02x} == {:02x} version: {:02x} == {:02x} "
               "checksum: {:02x} == {:02x}",
               magic_, MAGIC, version_, VERSION_NUMBER, checksum_, Sum64());
@@ -90,11 +90,6 @@ public:
   void SetCount(uint32_t count) noexcept { count_ = count; }
   void SetOverflow(uint32_t overflow) noexcept { overflow_ = overflow; }
 
-  [[nodiscard]] Meta &Meta() noexcept {
-    auto base = reinterpret_cast<std::byte *>(this);
-    return *reinterpret_cast<class Meta *>(base + sizeof(Page));
-  }
-
   [[nodiscard]] uint32_t Count() const noexcept { return count_; }
   [[nodiscard]] uint32_t Flags() const noexcept { return flags_; }
   [[nodiscard]] Pgid Id() const noexcept { return id_; }
@@ -115,6 +110,18 @@ public:
     return reinterpret_cast<const void *>(
         reinterpret_cast<const std::byte *>(this) + sizeof(Page));
   }
+
+  struct LeafNode {
+    uint32_t pos_;
+    uint32_t ksize_;
+    uint32_t vsize_;
+  };
+
+  struct BranchNode {
+    uint32_t pos_;
+    uint32_t ksize_;
+    Pgid pgid_;
+  };
 
 private:
   Pgid id_;
@@ -142,7 +149,7 @@ public:
   [[nodiscard]] std::vector<std::byte> &GetBuffer() noexcept { return buffer_; }
 
   // get a page from the buffer
-  [[nodiscard]] Page &GetPage(Pgid pgid) noexcept override {
+  [[nodiscard]] Page &GetPage(Pgid pgid) noexcept final {
     assert(pgid < size_);
     return *reinterpret_cast<Page *>(buffer_.data() + pgid * page_size_);
   }

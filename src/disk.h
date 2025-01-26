@@ -8,6 +8,7 @@
 #include "page.h"
 #include <cstdint>
 #include <expected>
+#include <fstream>
 #include <mutex>
 #include <sys/fcntl.h>
 namespace kv {
@@ -51,8 +52,8 @@ public:
     fs_.exceptions(std::ios::goodbit);
 
     // set up mmap for io
-    if (auto errOpt = mmap_handle_.Mmap(path_, fd_.GetFd(), INIT_MMAP_SIZE)) {
-      return std::unexpected{*errOpt};
+    if (auto err_opt = mmap_handle_.Mmap(path_, fd_.GetFd(), INIT_MMAP_SIZE)) {
+      return std::unexpected{*err_opt};
     }
 
     auto file_sz_or_err = OS::FileSize(path_);
@@ -140,26 +141,29 @@ public:
   std::optional<Error> Sync() const noexcept { return fd_.Sync(); }
 
   [[nodiscard]] std::expected<std::reference_wrapper<Page>, Error>
-  Allocate(Meta rwtx_meta, uint32_t sz) noexcept {
-    PageBuffer buf{sz, page_size_};
+  Allocate(Meta rwtx_meta, uint32_t count) noexcept {
+    PageBuffer buf{count, page_size_};
     auto &p = buf.GetPage(0);
-    p.SetOverflow(sz - 1);
+    p.SetOverflow(count - 1);
 
-    auto id_opt = freelist_.Allocate(sz);
+    auto id_opt = freelist_.Allocate(count);
     // valid allocation
     if (id_opt.has_value()) {
       return p;
     }
 
-    p.SetId(rwtx_meta.GetWatermark());
+    auto cur_wm = rwtx_meta.GetWatermark();
+    p.SetId(cur_wm);
     assert(p.Id() > 3);
-    auto min_sz = (p.Id() + sz) * page_size_;
+    auto min_sz = (p.Id() + count) * page_size_;
     if (min_sz > mmap_handle_.Size()) {
       auto err = mmap_handle_.Mmap(path_, fd_.GetFd(), min_sz);
       if (err) {
         return std::unexpected{*err};
       }
     }
+
+    rwtx_meta.SetWatermark(cur_wm + count);
     return p;
   }
 

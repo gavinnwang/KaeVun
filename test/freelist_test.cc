@@ -37,7 +37,10 @@ TEST(FreelistTest, PersistTest) {
   ASSERT_EQ(p.Count(), 4);
 
   kv::Freelist f1{};
-  f1.Read(p);
+  kv::PageBuffer buf1{1, kv::OS::DEFAULT_PAGE_SIZE};
+
+  auto &p4 = buf.GetPage(0);
+  f1.Read(p4);
 
   EXPECT_EQ(f1.All(), v);
 }
