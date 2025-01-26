@@ -13,7 +13,7 @@
 #include <sys/fcntl.h>
 namespace kv {
 
-class DiskHandler final : public PageHandler {
+class DiskHandler final {
   static constexpr uint64_t INIT_MMAP_SIZE = 1 << 30;
 
 public:
@@ -68,7 +68,7 @@ public:
   }
 
   // get page from mmap
-  [[nodiscard]] Page &GetPage(Pgid id) noexcept final {
+  [[nodiscard]] Page &GetPage(Pgid id) noexcept {
     assert(opened_);
     uint64_t pos = id * page_size_;
 

@@ -8,11 +8,13 @@
 #include <cstdint>
 #include <expected>
 #include <optional>
+#include <span>
+#include <type_traits>
 #include <vector>
+
 namespace kv {
 
 constexpr uint64_t VERSION_NUMBER = 1;
-
 constexpr uint32_t MAGIC = 0xED0CDAED;
 
 constexpr Pgid META_PAGE_ID = 0;
@@ -30,7 +32,6 @@ enum class PageFlag : uint32_t {
 
 class Meta {
 public:
-  // get the high watermark page id
   [[nodiscard]] Pgid GetWatermark() const noexcept { return watermark_; }
   void SetMagic(uint64_t magic) noexcept { magic_ = magic; }
   void SetVersion(uint64_t ver) noexcept { version_ = ver; }
@@ -41,12 +42,11 @@ public:
   void SetWatermark(Pgid id) noexcept { watermark_ = id; }
   void SetTxid(Txid tx) noexcept { txid_ = tx; }
 
-  // calculate the Fowler–Noll–Vo hash of meta
   [[nodiscard]] uint64_t Sum64() const noexcept {
     constexpr uint64_t FNV_OFFSET_BASIS_64 = 14695981039346656037ULL;
     constexpr uint64_t FNV_PRIME_64 = 1099511628211;
 
-    const auto ptr = reinterpret_cast<const uint8_t *>(this);
+    const auto *ptr = reinterpret_cast<const uint8_t *>(this);
     constexpr std::size_t length = offsetof(Meta, checksum_);
 
     uint64_t hash = FNV_OFFSET_BASIS_64;
@@ -54,7 +54,6 @@ public:
       hash ^= ptr[i];
       hash *= FNV_PRIME_64;
     }
-
     return hash;
   }
 
@@ -74,16 +73,26 @@ private:
   uint32_t page_size_;
   Pgid freelist_;
   Pgid buckets_;
-  Pgid watermark_; // high watermark page id
+  Pgid watermark_;
   Txid txid_;
   uint64_t checksum_;
 };
+
+template <typename T>
+concept IsValidPage =
+    std::same_as<T, class LeafPage> || std::same_as<T, class BranchPage>;
 
 class Page {
 public:
   Page() = default;
 
-  void SetId(Pgid id) noexcept { id_ = id; }
+  Page(const Page &other) = delete;
+  Page &operator=(const Page &other) = delete;
+  Page(Page &&other) = delete;
+  Page &operator=(Page &&other) noexcept = delete;
+  ~Page() = default;
+
+  void SetId(Pgid id) noexcept { pgid_ = id; }
   void SetFlags(PageFlag flags) noexcept {
     flags_ = static_cast<uint32_t>(flags);
   }
@@ -92,55 +101,92 @@ public:
 
   [[nodiscard]] uint32_t Count() const noexcept { return count_; }
   [[nodiscard]] uint32_t Flags() const noexcept { return flags_; }
-  [[nodiscard]] Pgid Id() const noexcept { return id_; }
+  [[nodiscard]] Pgid Id() const noexcept { return pgid_; }
   [[nodiscard]] uint32_t Overflow() const noexcept { return overflow_; }
 
   template <typename T> [[nodiscard]] T *GetDataAs() noexcept {
     return reinterpret_cast<T *>(Data());
   }
 
-  // write access to the data section
   [[nodiscard]] void *Data() noexcept {
     return reinterpret_cast<void *>(reinterpret_cast<std::byte *>(this) +
                                     sizeof(Page));
   }
 
-  // read access
   [[nodiscard]] const void *Data() const noexcept {
     return reinterpret_cast<const void *>(
         reinterpret_cast<const std::byte *>(this) + sizeof(Page));
   }
 
-  struct LeafNode {
-    uint32_t pos_;
-    uint32_t ksize_;
-    uint32_t vsize_;
-  };
+  template <IsValidPage T> [[nodiscard]] T &AsPage() noexcept {
+    return *reinterpret_cast<T *>(this);
+  }
 
-  struct BranchNode {
-    uint32_t pos_;
-    uint32_t ksize_;
-    Pgid pgid_;
-  };
-
-private:
-  Pgid id_;
+protected:
+  Pgid pgid_;
   uint32_t flags_;
   uint32_t overflow_;
   uint32_t count_;
 };
 
-// an interface that defines abstract methods for accessing pages
-class PageHandler {
-public:
-  virtual ~PageHandler() noexcept = default;
-  [[nodiscard]] virtual Page &GetPage(Pgid pgid) noexcept = 0;
+struct LeafElement {
+  uint32_t offset_; // the offset between this element address and the start of
+                    // the key address
+  uint32_t ksize_;
+  uint32_t vsize_;
 };
 
-// temporary in memory page
-class PageBuffer final : public PageHandler {
+struct BranchElement {
+  uint32_t offset_;
+  uint32_t ksize_;
+  Pgid pgid_;
+};
+
+template <typename T>
+concept IsValidPageElement =
+    std::same_as<T, LeafElement> || std::same_as<T, BranchElement>;
+
+template <IsValidPageElement T> class ElementPage : public Page {
 public:
-  // construct an empty page buffer for use
+  ElementPage(const ElementPage &other) = delete;
+  ElementPage &operator=(const ElementPage &other) = delete;
+  ElementPage(ElementPage &&other) = delete;
+  ElementPage &operator=(ElementPage &&other) noexcept = delete;
+  ~ElementPage() = delete;
+
+  [[nodiscard]] std::span<T> GetElements() noexcept {
+    return {&elements_[0], count_};
+  }
+
+  [[nodiscard]] T &GetElement(uint32_t i) noexcept { return elements_[i]; }
+
+  [[nodiscard]] virtual std::span<std::byte> GetKey(uint32_t i) noexcept = 0;
+
+  void SetElement(T e, uint32_t i) noexcept { elements_[i] = e; }
+
+private:
+  static_assert(std::is_trivially_copyable_v<T>);
+  static_assert(std::is_standard_layout_v<T>);
+  T elements_[0];
+};
+
+class LeafPage final : public ElementPage<LeafElement> {
+public:
+  ~LeafPage() = delete;
+  [[nodiscard]] std::span<std::byte> GetKey(uint32_t i) noexcept final {
+    return {};
+  }
+};
+class BranchPage final : public ElementPage<BranchElement> {
+public:
+  ~BranchPage() = delete;
+  [[nodiscard]] std::span<std::byte> GetKey(uint32_t i) noexcept final {
+    return {};
+  }
+};
+
+class PageBuffer final {
+public:
   PageBuffer(uint32_t size, uint32_t page_size) noexcept
       : size_(size), page_size_(page_size), buffer_(size * page_size) {}
 
@@ -148,8 +194,7 @@ public:
 
   [[nodiscard]] std::vector<std::byte> &GetBuffer() noexcept { return buffer_; }
 
-  // get a page from the buffer
-  [[nodiscard]] Page &GetPage(Pgid pgid) noexcept final {
+  [[nodiscard]] Page &GetPage(Pgid pgid) noexcept {
     assert(pgid < size_);
     return *reinterpret_cast<Page *>(buffer_.data() + pgid * page_size_);
   }

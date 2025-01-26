@@ -5,7 +5,7 @@
 
 namespace test {
 
-TEST(FreelistTest, PersistTest) {
+TEST(FreelistTest, Test1) {
   kv::PageBuffer buf{1, kv::OS::DEFAULT_PAGE_SIZE};
 
   auto &p = buf.GetPage(0);

@@ -20,8 +20,8 @@ message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
 # Compiler flags
 set(CMAKE_CXX_FLAGS_DEBUG
-    "${CMAKE_CXX_FLAGS_DEBUG} -Werror -Wall -Wextra -pedantic -stdlib=libc++ -std=gnu++23 -O0 -ggdb -fno-exceptions -Wno-unused -Wno-unused-parameter"
-)
+    "${CMAKE_CXX_FLAGS_DEBUG} -Werror -Wall -Wextra -pedantic -stdlib=libc++ -std=gnu++23 -O0 -ggdb -fno-exceptions -Wno-unused -Wno-unused-parameter -Wno-zero-length-array -Wno-reinterpret-base-class")
+
 # Sanitizer flags
 set(CMAKE_CXX_FLAGS_DEBUG
     "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=undefined -fno-sanitize=alignment"
