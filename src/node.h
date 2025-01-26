@@ -1,5 +1,6 @@
 #pragma once
 
+#include "fmt/ranges.h"
 #include "page.h"
 #include "slice.h"
 #include <cstddef>
@@ -37,35 +38,76 @@ public:
     }
     p.SetCount(nodes_.size());
     uint32_t cur_offset = sizeof(p);
+    auto *page_data = reinterpret_cast<std::byte *>(&p);
     for (uint32_t i = 0; i < p.Count(); i++) {
       if (is_leaf_) {
         LeafPage &leaf_p = p.AsPage<LeafPage>();
         auto &e = leaf_p.GetElement(i);
-        e.offset_ = static_cast<uint32_t>(std::uintptr_t(cur_offset) -
-                                          std::uintptr_t(std::addressof(p)));
+
+        cur_offset += sizeof(LeafElement);
+
+        e.offset_ = cur_offset;
         e.ksize_ = nodes_[i].key_.size();
         e.vsize_ = nodes_[i].val_.size();
 
-        cur_offset += e.ksize_ + e.vsize_;
+        std::memcpy(page_data + cur_offset, nodes_[i].key_.data(), e.ksize_);
+        cur_offset += e.ksize_;
+        std::memcpy(page_data + cur_offset, nodes_[i].val_.data(), e.vsize_);
+        cur_offset += e.vsize_;
       } else {
         auto &branch_p = p.AsPage<BranchPage>();
         auto &e = branch_p.GetElement(i);
-        e.offset_ = static_cast<uint32_t>(std::uintptr_t(cur_offset) -
-                                          std::uintptr_t(std::addressof(p)));
 
+        cur_offset += sizeof(BranchElement);
+
+        e.offset_ = cur_offset;
         e.ksize_ = nodes_[i].key_.size();
         e.pgid_ = nodes_[i].pgid_;
 
+        memcpy(page_data + cur_offset, nodes_[i].key_.data(), e.ksize_);
         cur_offset += e.ksize_;
       }
     }
   }
 
-  void Put(Slice &key, Slice &val, Pgid pgid) {
+  void Put(Slice &key, Slice &val) {
+    int index = -1;
     for (uint32_t i = 0; i < nodes_.size(); i++) {
-      if (nodes_[i].key_.compare(key)) {
+      if (nodes_[i].key_.compare(key) < 0) {
+        index = i;
       }
     }
+    if (index == -1)
+      index = nodes_.size();
+    nodes_.insert(nodes_.begin() + index, {0, key, val});
+  }
+
+  void Put(Slice &key, Pgid pgid) {
+    int index = -1;
+    for (uint32_t i = 0; i < nodes_.size(); i++) {
+      if (nodes_[i].key_.compare(key) < 0) {
+        index = i;
+      }
+    }
+    if (index == -1)
+      index = nodes_.size();
+    nodes_.insert(nodes_.begin() + index, {pgid, key, {}});
+  }
+
+  [[nodiscard]] std::string ToString() const noexcept {
+    std::vector<std::string> elements;
+    for (const auto &node : nodes_) {
+      if (is_leaf_) {
+        elements.push_back(fmt::format("{{ key: {}, val: {} }}",
+                                       node.key_.ToString(),
+                                       node.val_.ToString()));
+      } else {
+        elements.push_back(fmt::format("{{ key: {}, pgid: {} }}",
+                                       node.key_.ToString(), node.pgid_));
+      }
+    }
+
+    return fmt::format("{}", elements);
   }
 
 private:
