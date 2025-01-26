@@ -8,6 +8,7 @@
 
 namespace kv {
 
+// Non owning view of byte data
 class Slice {
 public:
   constexpr Slice() noexcept = default;
@@ -40,11 +41,11 @@ public:
     return std::string(reinterpret_cast<const char *>(data()), size());
   }
 
-  constexpr void clear() noexcept { data_ = std::span<const std::byte>{}; }
+  constexpr void clear() noexcept { data_ = {}; }
 
   [[nodiscard]] int compare(const Slice &other) const noexcept {
-    const size_t min_len = std::min(size(), other.size());
-    int cmp = std::memcmp(data(), other.data(), min_len);
+    auto min_len = std::min(size(), other.size());
+    auto cmp = std::memcmp(data(), other.data(), min_len);
     if (cmp == 0) {
       if (size() < other.size())
         return -1;

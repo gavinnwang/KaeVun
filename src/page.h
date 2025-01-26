@@ -2,6 +2,7 @@
 
 #include "error.h"
 #include "log.h"
+#include "slice.h"
 #include "type.h"
 #include <cassert>
 #include <cstddef>
@@ -160,11 +161,14 @@ public:
 
   [[nodiscard]] T &GetElement(uint32_t i) noexcept { return elements_[i]; }
 
-  [[nodiscard]] virtual std::span<std::byte> GetKey(uint32_t i) noexcept = 0;
-
   void SetElement(T e, uint32_t i) noexcept { elements_[i] = e; }
 
-private:
+  [[nodiscard]] Slice GetKey(uint32_t i) noexcept {
+    return {reinterpret_cast<std::byte *>(this) + elements_[i].offset_,
+            elements_[i].ksize_};
+  }
+
+protected:
   static_assert(std::is_trivially_copyable_v<T>);
   static_assert(std::is_standard_layout_v<T>);
   T elements_[0];
@@ -173,16 +177,17 @@ private:
 class LeafPage final : public ElementPage<LeafElement> {
 public:
   ~LeafPage() = delete;
-  [[nodiscard]] std::span<std::byte> GetKey(uint32_t i) noexcept final {
-    return {};
+  [[nodiscard]] Slice GetVal(uint32_t i) noexcept {
+    return {reinterpret_cast<std::byte *>(this) + elements_[i].offset_ +
+                elements_[i].ksize_,
+            elements_[i].vsize_};
   }
 };
+
 class BranchPage final : public ElementPage<BranchElement> {
 public:
   ~BranchPage() = delete;
-  [[nodiscard]] std::span<std::byte> GetKey(uint32_t i) noexcept final {
-    return {};
-  }
+  [[nodiscard]] Pgid GetPgid(uint32_t i) noexcept { return elements_[i].pgid_; }
 };
 
 class PageBuffer final {
