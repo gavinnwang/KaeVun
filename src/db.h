@@ -25,7 +25,8 @@ class DB {
 public:
   DB() noexcept = default;
 
-  static std::expected<std::unique_ptr<DB, std::function<void(DB *)>>, Error>
+  [[nodiscard]] static std::expected<
+      std::unique_ptr<DB, std::function<void(DB *)>>, Error>
   Open(const std::filesystem::path &path) noexcept {
     auto db = std::unique_ptr<DB, std::function<void(DB *)>>(
         new DB{}, [](DB *db_ptr) {

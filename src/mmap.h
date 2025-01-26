@@ -55,7 +55,7 @@ public:
     auto mmap_sz = MmapSize(fmax(min_sz, file_sz));
     LOG_INFO("Mmaping size {}", mmap_sz);
 
-    // deference all existing mmap reference which are the nodes
+    // TODO: deference all existing mmap reference which are the nodes
 
     Unmap(); // unmap previous before mmpaing
 

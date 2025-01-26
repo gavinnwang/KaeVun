@@ -131,7 +131,7 @@ protected:
 };
 
 struct LeafElement {
-  uint32_t offset_; // the offset between this element address and the start of
+  uint32_t offset_; // the offset between the start of page and the start of
                     // the key address
   uint32_t ksize_;
   uint32_t vsize_;

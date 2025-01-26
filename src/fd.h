@@ -13,7 +13,7 @@ public:
 
   [[nodiscard]] explicit Fd(int fd) noexcept : fd_(fd) {}
 
-  std::optional<Error> Reset() noexcept {
+  [[nodiscard]] std::optional<Error> Reset() noexcept {
     if (fd_ != -1) {
       if (::close(fd_) == -1) {
         return Error("Error releasing fd");
@@ -23,7 +23,7 @@ public:
     return std::nullopt;
   }
 
-  std::optional<Error> Sync() const noexcept {
+  [[nodiscard]] std::optional<Error> Sync() const noexcept {
     if (!IsValid()) {
       return Error{"Invalid file descriptor"};
     }
