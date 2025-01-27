@@ -43,7 +43,12 @@ private:
 // In memory representation of the buckets meta page
 class Buckets {
 public:
-  explicit Buckets(Page &p) noexcept : p_(p) { Read(); };
+  explicit Buckets(Page &p) noexcept { Read(p); };
+
+  Buckets(Buckets &&other) = default;
+  Buckets &operator=(Buckets &&other) noexcept = default;
+  Buckets(const Buckets &other) = delete;
+  Buckets &operator=(const Buckets &other) = delete;
 
   [[nodiscard]] uint16_t Size() const noexcept { return buckets_.size(); }
 
@@ -56,9 +61,9 @@ public:
   }
 
 private:
-  void Read() noexcept {
-    Deserializer d(&p_);
-    for (uint32_t i = 0; i < p_.Count(); i++) {
+  void Read(Page &p) noexcept {
+    Deserializer d(&p);
+    for (uint32_t i = 0; i < p.Count(); i++) {
       auto name = d.Read<std::string>();
       const auto auto_id = d.Read<uint64_t>();
       const auto root = d.Read<Pgid>();
@@ -68,10 +73,10 @@ private:
     }
   }
 
-  void Write() const noexcept {
-    p_.SetFlags(PageFlag::BucketPage);
-    p_.SetCount(buckets_.size());
-    Serializer s{p_.Data()};
+  void Write(Page &p) const noexcept {
+    p.SetFlags(PageFlag::BucketPage);
+    p.SetCount(buckets_.size());
+    Serializer s{p.Data()};
     for (const auto &[name, b] : buckets_) {
       s.Write(name);
       s.Write(b.AutoId());
@@ -79,7 +84,6 @@ private:
     }
   }
 
-  Page &p_;
   std::unordered_map<std::string, BucketMeta> buckets_{};
 };
 

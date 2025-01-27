@@ -122,7 +122,7 @@ public:
     auto tx_or_err = Begin(true);
     if (!tx_or_err)
       return tx_or_err.error();
-    auto tx = tx_or_err.value();
+    auto &tx = tx_or_err.value();
 
     auto rollback_guard = Defer([&]() noexcept {
       // make sure tx is rollback when it panics

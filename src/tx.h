@@ -16,15 +16,15 @@ namespace kv {
 class Tx {
 
 public:
-  explicit Tx(DiskHandler &disk, bool writable) noexcept
-      : open_(true), disk_(disk), writable_(writable),
-        buckets_(Buckets{disk_.GetPage(3)}) {};
+  Tx(DiskHandler &disk, bool writable) noexcept
+      : open_(true), disk_(&disk), writable_(writable),
+        buckets_(Buckets{disk_->GetPage(3)}) {};
 
-  Tx(const Tx &) = default;
+  Tx(const Tx &) = delete;
   Tx &operator=(const Tx &) = delete;
 
   Tx(Tx &&) = default;
-  Tx &operator=(Tx &&) = delete;
+  Tx &operator=(Tx &&) noexcept = default;
 
   void Rollback() noexcept { LOG_INFO("Rolling back tx"); };
 
@@ -63,7 +63,7 @@ private:
   }
 
   bool open_{false};
-  DiskHandler &disk_;
+  DiskHandler *disk_;
   bool writable_{false};
   std::vector<Node *> pending_;
   std::unordered_map<Pgid, Page &> page_{};
