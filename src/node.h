@@ -2,6 +2,7 @@
 
 #include "fmt/format.h"
 #include "page.h"
+#include "persist.h"
 #include "slice.h"
 #include <cstddef>
 #include <cstdint>
@@ -37,37 +38,39 @@ public:
       p.SetFlags(PageFlag::BranchPage);
     }
     p.SetCount(nodes_.size());
+
+    Serializer serializer(&p);
     // skip all the header
-    uint32_t cur_offset =
-        sizeof(p) + nodes_.size() * (is_leaf_ ? sizeof(LeafElement)
-                                              : sizeof(BranchElement));
-    auto *page_data = reinterpret_cast<std::byte *>(&p);
+    uint32_t data_offset =
+        sizeof(p) +
+        p.Count() * (is_leaf_ ? sizeof(LeafElement) : sizeof(BranchElement));
+
+    serializer.Seek(data_offset);
     for (uint32_t i = 0; i < p.Count(); i++) {
       if (is_leaf_) {
         LeafPage &leaf_p = p.AsPage<LeafPage>();
         auto &e = leaf_p.GetElement(i);
 
+        uint32_t cur_offset = serializer.Offset();
         e.offset_ = cur_offset;
+
         e.ksize_ = nodes_[i].key_.Size();
         e.vsize_ = nodes_[i].val_.Size();
 
-        // LOG_DEBUG("offset: {}, ksz: {}, vsz: {}", cur_offset, e.ksize_,
-        //           e.vsize_);
-
-        std::memcpy(page_data + cur_offset, nodes_[i].key_.Data(), e.ksize_);
-        cur_offset += e.ksize_;
-        std::memcpy(page_data + cur_offset, nodes_[i].val_.Data(), e.vsize_);
-        cur_offset += e.vsize_;
+        serializer.WriteBytes(nodes_[i].key_.Data(), e.ksize_);
+        serializer.WriteBytes(nodes_[i].val_.Data(), e.vsize_);
       } else {
-        auto &branch_p = p.AsPage<BranchPage>();
+        // For branch pages
+        BranchPage &branch_p = p.AsPage<BranchPage>();
         auto &e = branch_p.GetElement(i);
 
+        uint32_t cur_offset = serializer.Offset();
         e.offset_ = cur_offset;
+
         e.ksize_ = nodes_[i].key_.Size();
         e.pgid_ = nodes_[i].pgid_;
 
-        memcpy(page_data + cur_offset, nodes_[i].key_.Data(), e.ksize_);
-        cur_offset += e.ksize_;
+        serializer.WriteBytes(nodes_[i].key_.Data(), e.ksize_);
       }
     }
   }

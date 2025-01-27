@@ -1,6 +1,5 @@
 #pragma once
 
-#include "log.h"
 #include <cassert>
 #include <cstddef>
 #include <cstring>
