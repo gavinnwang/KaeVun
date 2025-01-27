@@ -1,5 +1,6 @@
 #pragma once
 
+#include "log.h"
 #include <cassert>
 #include <cstddef>
 #include <cstring>
@@ -23,33 +24,30 @@ public:
   [[nodiscard]] Slice(const char *str) noexcept
       : data_(reinterpret_cast<const std::byte *>(str), std::strlen(str)) {}
 
-  [[nodiscard]] constexpr const std::byte *data() const noexcept {
+  [[nodiscard]] constexpr const std::byte *Data() const noexcept {
     return data_.data();
   }
 
-  [[nodiscard]] constexpr size_t size() const noexcept { return data_.size(); }
-
-  [[nodiscard]] constexpr bool empty() const noexcept { return data_.empty(); }
+  [[nodiscard]] constexpr size_t Size() const noexcept { return data_.size(); }
 
   [[nodiscard]] constexpr std::byte operator[](size_t index) const noexcept {
-    assert(index < size());
+    assert(index < Size());
     return data_[index];
   }
 
   // return a copy of data as a string
   [[nodiscard]] std::string ToString() const {
-    return std::string(reinterpret_cast<const char *>(data()), size());
+    // LOG_DEBUG("{}", reinterpret_cast<const void *>(Data()));
+    return std::string(reinterpret_cast<const char *>(Data()), Size());
   }
 
-  constexpr void clear() noexcept { data_ = {}; }
-
-  [[nodiscard]] int compare(const Slice &other) const noexcept {
-    auto min_len = std::min(size(), other.size());
-    auto cmp = std::memcmp(data(), other.data(), min_len);
+  [[nodiscard]] int Compare(const Slice &other) const noexcept {
+    auto min_len = std::min(Size(), other.Size());
+    auto cmp = std::memcmp(Data(), other.Data(), min_len);
     if (cmp == 0) {
-      if (size() < other.size())
+      if (Size() < other.Size())
         return -1;
-      if (size() > other.size())
+      if (Size() > other.Size())
         return 1;
     }
     return cmp;
@@ -57,8 +55,8 @@ public:
 
   [[nodiscard]] friend constexpr bool operator==(const Slice &lhs,
                                                  const Slice &rhs) noexcept {
-    return lhs.size() == rhs.size() &&
-           std::memcmp(lhs.data(), rhs.data(), lhs.size()) == 0;
+    return lhs.Size() == rhs.Size() &&
+           std::memcmp(lhs.Data(), rhs.Data(), lhs.Size()) == 0;
   }
 
   [[nodiscard]] friend constexpr bool operator!=(const Slice &lhs,

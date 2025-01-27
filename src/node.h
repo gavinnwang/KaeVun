@@ -48,49 +48,50 @@ public:
         auto &e = leaf_p.GetElement(i);
 
         e.offset_ = cur_offset;
-        e.ksize_ = nodes_[i].key_.size();
-        e.vsize_ = nodes_[i].val_.size();
+        e.ksize_ = nodes_[i].key_.Size();
+        e.vsize_ = nodes_[i].val_.Size();
 
-        std::memcpy(page_data + cur_offset, nodes_[i].key_.data(), e.ksize_);
+        // LOG_DEBUG("offset: {}, ksz: {}, vsz: {}", cur_offset, e.ksize_,
+        //           e.vsize_);
+
+        std::memcpy(page_data + cur_offset, nodes_[i].key_.Data(), e.ksize_);
         cur_offset += e.ksize_;
-        std::memcpy(page_data + cur_offset, nodes_[i].val_.data(), e.vsize_);
+        std::memcpy(page_data + cur_offset, nodes_[i].val_.Data(), e.vsize_);
         cur_offset += e.vsize_;
       } else {
         auto &branch_p = p.AsPage<BranchPage>();
         auto &e = branch_p.GetElement(i);
 
         e.offset_ = cur_offset;
-        e.ksize_ = nodes_[i].key_.size();
+        e.ksize_ = nodes_[i].key_.Size();
         e.pgid_ = nodes_[i].pgid_;
 
-        memcpy(page_data + cur_offset, nodes_[i].key_.data(), e.ksize_);
+        memcpy(page_data + cur_offset, nodes_[i].key_.Data(), e.ksize_);
         cur_offset += e.ksize_;
       }
     }
   }
 
   void Put(Slice &key, Slice &val) {
-    int index = -1;
-    for (uint32_t i = 0; i < nodes_.size(); i++) {
-      if (nodes_[i].key_.compare(key) < 0) {
-        index = i;
-      }
-    }
-    if (index == -1)
-      index = nodes_.size();
+    auto index = Search(key);
     nodes_.insert(nodes_.begin() + index, {0, key, val});
   }
 
   void Put(Slice &key, Pgid pgid) {
+    auto index = Search(key);
+    nodes_.insert(nodes_.begin() + index, {pgid, key, {}});
+  }
+
+  uint32_t Search(Slice &key) const noexcept {
     int index = -1;
     for (uint32_t i = 0; i < nodes_.size(); i++) {
-      if (nodes_[i].key_.compare(key) < 0) {
+      if (nodes_[i].key_.Compare(key) < 0) {
         index = i;
       }
     }
     if (index == -1)
       index = nodes_.size();
-    nodes_.insert(nodes_.begin() + index, {pgid, key, {}});
+    return index;
   }
 
   [[nodiscard]] std::string ToString() const noexcept {
