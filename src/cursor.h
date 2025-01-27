@@ -7,7 +7,7 @@
 namespace kv {
 class Cursor {
 public:
-  explicit Cursor() = default;
+  Cursor() = default;
 
 private:
   struct TreeNode {
