@@ -151,7 +151,7 @@ private:
     m.SetPageSize(disk_handler_.PageSize());
     m.SetFreelist(FREELIST_PAGE_ID);
     m.SetWatermark(4); // water mark?
-    m.SetTxid(0);
+    m.IncrementTxid(0);
     m.SetChecksum(m.Sum64());
 
     auto &freelist_p = buf.GetPage(FREELIST_PAGE_ID);

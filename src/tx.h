@@ -16,9 +16,13 @@ namespace kv {
 class Tx {
 
 public:
-  Tx(DiskHandler &disk, bool writable) noexcept
-      : open_(true), disk_(&disk), writable_(writable),
-        buckets_(Buckets{disk_->GetPage(3)}) {};
+  Tx(DiskHandler &disk, bool writable, Meta db_meta) noexcept
+      : open_(true), disk_(&disk), writable_(writable), meta_(db_meta),
+        buckets_(Buckets{disk_->GetPage(meta_.GetBuckets())}) {
+    if (writable_) {
+      meta_.IncrementTxid();
+    }
+  };
 
   Tx(const Tx &) = delete;
   Tx &operator=(const Tx &) = delete;
@@ -66,7 +70,7 @@ public:
     auto [it, ok] = nodes_.emplace(pgid, Node{});
     Node &node = it->second;
 
-    node.SetTx(this); // fix is here
+    node.SetTx(this);
     node.SetParent(parent);
     if (parent)
       node.SetDepth(parent->GetDepth() + 1);
@@ -78,6 +82,26 @@ public:
     return &node;
   }
 
+  [[nodiscard]] std::optional<Error> Write() noexcept {
+    // Collect dirty pages
+    std::vector<Page *> dirty_pages;
+    dirty_pages.reserve(pages_.size());
+    for (const auto &[_, page_ptr] : pages_) {
+      dirty_pages.push_back(page_ptr);
+    }
+
+    // Sort pages by their pgid
+    std::sort(dirty_pages.begin(), dirty_pages.end(),
+              [](const Page *a, const Page *b) { return a->Id() < b->Id(); });
+
+    // Write pages to disk in order
+    for (const auto p : dirty_pages) {
+      disk_->WritePage(*p);
+    }
+
+    return {};
+  }
+
 private:
   [[nodiscard]] std::expected<Page *, Error> Allocate(uint32_t count) {
     return nullptr;
@@ -86,10 +110,12 @@ private:
   bool open_{false};
   DiskHandler *disk_;
   bool writable_{false};
+  Meta meta_;
   std::vector<Node> pending_;
-  std::unordered_map<Pgid, Page> pages_{};
+  std::unordered_map<Pgid, Page *> pages_{};
+  // nodes_ represents the in-memory version of pages allowing for key value
+  // changes.
   std::unordered_map<Pgid, Node> nodes_{};
   Buckets buckets_;
-  Meta meta_;
 };
 } // namespace kv

@@ -128,14 +128,13 @@ public:
 
   [[nodiscard]] std::optional<Error> WritePageBuffer(PageBuffer &buf,
                                                      Pgid start_pgid) noexcept {
-    uint64_t offset = start_pgid * page_size_;
-    fs_.seekp(offset);
-    fs_.write(reinterpret_cast<char *>(buf.GetData().data()),
-              buf.GetData().size());
-    if (fs_.fail()) {
-      return Error{"IO Error"};
-    }
-    return fd_.Sync();
+    return WriteRaw(reinterpret_cast<char *>(buf.GetData().data()),
+                    buf.GetData().size(), start_pgid * page_size_);
+  }
+
+  [[nodiscard]] std::optional<Error> WritePage(Page &p) noexcept {
+    const auto size = (p.Overflow() + 1) * PageSize();
+    return WriteRaw(reinterpret_cast<char *>(&p), size, p.Id() * PageSize());
   }
 
   std::optional<Error> Sync() const noexcept { return fd_.Sync(); }
@@ -165,6 +164,17 @@ public:
 
     rwtx_meta.SetWatermark(cur_wm + count);
     return p;
+  }
+
+private:
+  [[nodiscard]] std::optional<Error> WriteRaw(const char *data, size_t size,
+                                              uint64_t offset) noexcept {
+    fs_.seekp(offset);
+    fs_.write(data, size);
+    if (fs_.fail()) {
+      return Error{"IO Error"};
+    }
+    return fd_.Sync(); // flush to disk
   }
 
 private:

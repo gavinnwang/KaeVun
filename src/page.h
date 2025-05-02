@@ -34,6 +34,7 @@ enum class PageFlag : uint32_t {
 class Meta {
 public:
   [[nodiscard]] Pgid GetWatermark() const noexcept { return watermark_; }
+  [[nodiscard]] Pgid GetBuckets() const noexcept { return buckets_; }
   void SetMagic(uint64_t magic) noexcept { magic_ = magic; }
   void SetVersion(uint64_t ver) noexcept { version_ = ver; }
   void SetPageSize(uint32_t size) noexcept { page_size_ = size; }
@@ -41,7 +42,7 @@ public:
   void SetBuckets(Pgid b) noexcept { buckets_ = b; }
   void SetChecksum(uint64_t csum) noexcept { checksum_ = csum; }
   void SetWatermark(Pgid id) noexcept { watermark_ = id; }
-  void SetTxid(Txid tx) noexcept { txid_ = tx; }
+  void IncrementTxid() noexcept { txid_++; }
 
   [[nodiscard]] uint64_t Sum64() const noexcept {
     constexpr uint64_t FNV_OFFSET_BASIS_64 = 14695981039346656037ULL;
