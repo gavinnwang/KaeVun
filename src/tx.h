@@ -5,12 +5,12 @@
 #include "error.h"
 #include "node.h"
 #include "page.h"
+#include "type.h"
 #include <cstdint>
 #include <expected>
 #include <optional>
 #include <string>
 #include <unordered_map>
-#include <vector>
 namespace kv {
 
 class Tx {
@@ -57,6 +57,27 @@ public:
 
   [[nodiscard]] Meta &GetMeta() noexcept { return meta_; }
 
+  [[nodiscard]] Node *GetNode(Pgid pgid, Node *parent) noexcept {
+    // 1. Return existing node if cached.
+    if (auto it = nodes_.find(pgid); it != nodes_.end())
+      return &it->second;
+
+    // 2. Otherwise construct a blank Node in-place inside the map.
+    auto [it, ok] = nodes_.emplace(pgid, Node{});
+    Node &node = it->second;
+
+    node.SetTx(this); // fix is here
+    node.SetParent(parent);
+    if (parent)
+      node.SetDepth(parent->GetDepth() + 1);
+
+    // read page into node …
+    Page &p = GetPage(pgid);
+    node.Read(p);
+
+    return &node;
+  }
+
 private:
   [[nodiscard]] std::expected<Page *, Error> Allocate(uint32_t count) {
     return nullptr;
@@ -65,9 +86,9 @@ private:
   bool open_{false};
   DiskHandler *disk_;
   bool writable_{false};
-  std::vector<Node *> pending_;
-  std::unordered_map<Pgid, Page &> page_{};
-  std::unordered_map<Pgid, Node &> node_{};
+  std::vector<Node> pending_;
+  std::unordered_map<Pgid, Page> pages_{};
+  std::unordered_map<Pgid, Node> nodes_{};
   Buckets buckets_;
   Meta meta_;
 };

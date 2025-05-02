@@ -10,22 +10,24 @@
 namespace kv {
 
 // in memory version of a page
+class Tx;
 class Node {
+
 public:
   void Read(Page &p) noexcept {
     is_leaf_ = (p.Flags() & static_cast<uint32_t>(PageFlag::LeafPage));
-    nodes_.resize(p.Count());
+    elements_.resize(p.Count());
     for (uint32_t i = 0; i < p.Count(); i++) {
       if (is_leaf_) {
         LeafPage &leaf_p = p.AsPage<LeafPage>();
         auto &element = leaf_p.GetElement(i);
-        nodes_[i].key_ = leaf_p.GetKey(i);
-        nodes_[i].val_ = leaf_p.GetVal(i);
+        elements_[i].key_ = leaf_p.GetKey(i);
+        elements_[i].val_ = leaf_p.GetVal(i);
       } else {
         auto &branch_p = p.AsPage<BranchPage>();
         auto &elements = branch_p.GetElement(i);
-        nodes_[i].key_ = branch_p.GetKey(i);
-        nodes_[i].pgid_ = branch_p.GetPgid(i);
+        elements_[i].key_ = branch_p.GetKey(i);
+        elements_[i].pgid_ = branch_p.GetPgid(i);
       }
     }
     // save first key for spliting
@@ -37,7 +39,7 @@ public:
     } else {
       p.SetFlags(PageFlag::BranchPage);
     }
-    p.SetCount(nodes_.size());
+    p.SetCount(elements_.size());
 
     Serializer serializer(&p);
     // skip all the header
@@ -54,53 +56,52 @@ public:
         uint32_t cur_offset = serializer.Offset();
         e.offset_ = cur_offset;
 
-        e.ksize_ = nodes_[i].key_.Size();
-        e.vsize_ = nodes_[i].val_.Size();
+        e.ksize_ = elements_[i].key_.Size();
+        e.vsize_ = elements_[i].val_.Size();
 
-        serializer.WriteBytes(nodes_[i].key_.Data(), e.ksize_);
-        serializer.WriteBytes(nodes_[i].val_.Data(), e.vsize_);
+        serializer.WriteBytes(elements_[i].key_.Data(), e.ksize_);
+        serializer.WriteBytes(elements_[i].val_.Data(), e.vsize_);
       } else {
-        // For branch pages
         BranchPage &branch_p = p.AsPage<BranchPage>();
         auto &e = branch_p.GetElement(i);
 
         uint32_t cur_offset = serializer.Offset();
         e.offset_ = cur_offset;
 
-        e.ksize_ = nodes_[i].key_.Size();
-        e.pgid_ = nodes_[i].pgid_;
+        e.ksize_ = elements_[i].key_.Size();
+        e.pgid_ = elements_[i].pgid_;
 
-        serializer.WriteBytes(nodes_[i].key_.Data(), e.ksize_);
+        serializer.WriteBytes(elements_[i].key_.Data(), e.ksize_);
       }
     }
   }
 
-  void Put(Slice &key, Slice &val) {
+  void Put(Slice &key, Slice &val) noexcept {
     auto index = Search(key);
-    nodes_.insert(nodes_.begin() + index, {0, key, val});
+    elements_.insert(elements_.begin() + index, {0, key, val});
   }
 
-  void Put(Slice &key, Pgid pgid) {
+  void Put(Slice &key, Pgid pgid) noexcept {
     auto index = Search(key);
-    nodes_.insert(nodes_.begin() + index, {pgid, key, {}});
+    elements_.insert(elements_.begin() + index, {pgid, key, {}});
   }
 
   uint32_t Search(Slice &key) const noexcept {
     int index = -1;
-    for (uint32_t i = 0; i < nodes_.size(); i++) {
-      if (nodes_[i].key_.Compare(key) < 0) {
+    for (uint32_t i = 0; i < elements_.size(); i++) {
+      if (elements_[i].key_.Compare(key) < 0) {
         index = i;
       }
     }
     if (index == -1)
-      index = nodes_.size();
+      index = elements_.size();
     return index;
   }
 
   [[nodiscard]] std::string ToString() const noexcept {
     std::vector<std::string> elements;
 
-    for (const auto &node : nodes_) {
+    for (const auto &node : elements_) {
       if (is_leaf_) {
         elements.push_back(fmt::format("( key: {}, val: {} )",
                                        node.key_.ToString(),
@@ -120,8 +121,21 @@ public:
     Slice val_;
   };
 
+  Node *Root() noexcept { return parent_ ? parent_->Root() : this; }
+
+  // ChildAt Returns the child node at a given index.
+  Node *ChildAt(int index);
+
+  void SetTx(Tx *tx) { tx_ = tx; }
+  void SetParent(Node *parent) { parent_ = parent; }
+  void SetDepth(int depth) { depth_ = depth; }
+  int GetDepth() const { return depth_; }
+
 private:
-  std::vector<NodeElement> nodes_;
+  std::vector<NodeElement> elements_;
   bool is_leaf_;
+  int depth_;
+  Tx *tx_;
+  Node *parent_ = nullptr;
 };
 } // namespace kv
