@@ -39,8 +39,6 @@ public:
     return buckets_.Bucket(name);
   }
 
-  [[nodiscard]] Page &GetPage(Pgid id) noexcept;
-
   [[nodiscard]] std::expected<BucketMeta, Error>
   CreateBucket(const std::string &name) noexcept {
     if (!open_) {
@@ -59,12 +57,15 @@ public:
     return std::unexpected{Error{"Tx not writable"}};
   }
 
+private:
+  [[nodiscard]] Page &GetPage(Pgid id) noexcept;
   [[nodiscard]] Meta &GetMeta() noexcept { return meta_; }
 
-  [[nodiscard]] Node *GetNode(Pgid pgid, Node *parent) noexcept {
+  // GetNode creates a node from  apage and associates with a given parent.
+  [[nodiscard]] Node &GetNode(Pgid pgid, Node *parent) noexcept {
     // 1. Return existing node if cached.
     if (auto it = nodes_.find(pgid); it != nodes_.end())
-      return &it->second;
+      return it->second;
 
     // 2. Otherwise construct a blank Node in-place inside the map.
     auto [it, ok] = nodes_.emplace(pgid, Node{});
@@ -79,9 +80,10 @@ public:
     Page &p = GetPage(pgid);
     node.Read(p);
 
-    return &node;
+    return node;
   }
 
+  // Write write any dirty pages to disk.
   [[nodiscard]] std::optional<Error> Write() noexcept {
     // Collect dirty pages
     std::vector<Page *> dirty_pages;
@@ -98,11 +100,31 @@ public:
     for (const auto p : dirty_pages) {
       disk_->WritePage(*p);
     }
+    disk_->Sync();
+
+    // Clear out the page cache.
+    pages_.clear();
 
     return {};
   }
 
-private:
+  // WriteMeta writes the meta to the disk.
+  [[nodiscard]] std::optional<Error> WriteMeta() noexcept {
+    PageBuffer buf{1, disk_->PageSize()};
+    auto &p = buf.GetPage(0);
+    meta_.Write(p);
+    // Write the meta page to file.
+    auto err = disk_->WritePage(p);
+    if (err) {
+      return err;
+    }
+    err = disk_->Sync();
+    if (err) {
+      return err;
+    }
+    return {};
+  }
+
   [[nodiscard]] std::expected<Page *, Error> Allocate(uint32_t count) {
     return nullptr;
   }
@@ -112,6 +134,7 @@ private:
   bool writable_{false};
   Meta meta_;
   std::vector<Node> pending_;
+  // Page cache
   std::unordered_map<Pgid, Page *> pages_{};
   // nodes_ represents the in-memory version of pages allowing for key value
   // changes.

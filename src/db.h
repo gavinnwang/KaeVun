@@ -25,8 +25,9 @@ class DB {
 public:
   DB() noexcept = default;
 
-  [[nodiscard]] static std::expected<
-      std::unique_ptr<DB, std::function<void(DB *)>>, Error>
+  using RAII_DB = std::unique_ptr<DB, std::function<void(DB *)>>;
+
+  [[nodiscard]] static std::expected<RAII_DB, Error>
   Open(const std::filesystem::path &path) noexcept {
     auto db = std::unique_ptr<DB, std::function<void(DB *)>>(
         new DB{}, [](DB *db_ptr) {
@@ -91,7 +92,7 @@ public:
     std::lock_guard metalock(metalock_);
     if (!opened_)
       return std::unexpected{Error{"DB not opened"}};
-    Tx tx{disk_handler_, true};
+    Tx tx{disk_handler_, true, *meta_};
     txs.push_back(&tx);
     rwtx_ = &tx;
 
@@ -103,7 +104,7 @@ public:
     std::lock_guard metalock(metalock_);
     if (!opened_)
       return std::unexpected{Error{"DB not opened"}};
-    Tx tx{disk_handler_, false};
+    Tx tx{disk_handler_, false, *meta_};
     txs.push_back(&tx);
     // add read only txid to freelist
 
@@ -118,7 +119,7 @@ public:
   // std::optional<Error> Get(const Slice &key, std::string *output) noexcept;
 
   std::optional<Error>
-  Update(const std::function<std::optional<Error>(Tx *)> &fn) noexcept {
+  Update(const std::function<std::optional<Error>(Tx &)> &fn) noexcept {
     auto tx_or_err = Begin(true);
     if (!tx_or_err)
       return tx_or_err.error();
@@ -129,7 +130,7 @@ public:
       tx.Rollback();
     });
 
-    auto err_opt = fn(&tx);
+    auto err_opt = fn(tx);
     if (err_opt) {
       tx.Rollback();
     }
@@ -151,7 +152,7 @@ private:
     m.SetPageSize(disk_handler_.PageSize());
     m.SetFreelist(FREELIST_PAGE_ID);
     m.SetWatermark(4); // water mark?
-    m.IncrementTxid(0);
+    m.SetTxid(0);
     m.SetChecksum(m.Sum64());
 
     auto &freelist_p = buf.GetPage(FREELIST_PAGE_ID);

@@ -13,20 +13,6 @@ namespace kv {
 
 class Tx;
 
-// Bucket associated with a tx
-class BucketTx {
-public:
-  explicit BucketTx(Tx &tx, const std::string &name) : tx_(tx), name_(name) {}
-
-  [[nodiscard]] const std::string &Name() const noexcept { return name_; }
-
-  [[nodiscard]] Tx &Transaction() const noexcept { return tx_; }
-
-private:
-  Tx &tx_;
-  const std::string &name_;
-};
-
 class BucketMeta {
 public:
   BucketMeta(Pgid root, uint64_t auto_id) : root_(root), auto_id_(auto_id) {}
@@ -38,6 +24,22 @@ public:
 private:
   Pgid root_;
   uint64_t auto_id_;
+};
+
+// Bucket associated with a tx
+class Bucket {
+public:
+  explicit Bucket(Tx &tx, const std::string &name, BucketMeta meta)
+      : tx_(tx), name_(name), meta_(std::move(meta)) {}
+
+  [[nodiscard]] const std::string &Name() const noexcept { return name_; }
+
+  [[nodiscard]] Tx &Transaction() const noexcept { return tx_; }
+
+private:
+  Tx &tx_;
+  const std::string &name_;
+  BucketMeta meta_;
 };
 
 // In memory representation of the buckets meta page

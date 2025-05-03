@@ -137,7 +137,9 @@ public:
     return WriteRaw(reinterpret_cast<char *>(&p), size, p.Id() * PageSize());
   }
 
-  std::optional<Error> Sync() const noexcept { return fd_.Sync(); }
+  [[nodiscard]] std::optional<Error> Sync() const noexcept {
+    return fd_.Sync();
+  }
 
   [[nodiscard]] std::expected<std::reference_wrapper<Page>, Error>
   Allocate(Meta rwtx_meta, uint32_t count) noexcept {

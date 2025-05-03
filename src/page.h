@@ -31,55 +31,6 @@ enum class PageFlag : uint32_t {
   FreelistPage = 0x10
 };
 
-class Meta {
-public:
-  [[nodiscard]] Pgid GetWatermark() const noexcept { return watermark_; }
-  [[nodiscard]] Pgid GetBuckets() const noexcept { return buckets_; }
-  void SetMagic(uint64_t magic) noexcept { magic_ = magic; }
-  void SetVersion(uint64_t ver) noexcept { version_ = ver; }
-  void SetPageSize(uint32_t size) noexcept { page_size_ = size; }
-  void SetFreelist(Pgid f) noexcept { freelist_ = f; }
-  void SetBuckets(Pgid b) noexcept { buckets_ = b; }
-  void SetChecksum(uint64_t csum) noexcept { checksum_ = csum; }
-  void SetWatermark(Pgid id) noexcept { watermark_ = id; }
-  void IncrementTxid() noexcept { txid_++; }
-
-  [[nodiscard]] uint64_t Sum64() const noexcept {
-    constexpr uint64_t FNV_OFFSET_BASIS_64 = 14695981039346656037ULL;
-    constexpr uint64_t FNV_PRIME_64 = 1099511628211;
-
-    const auto *ptr = reinterpret_cast<const uint8_t *>(this);
-    constexpr std::size_t length = offsetof(Meta, checksum_);
-
-    uint64_t hash = FNV_OFFSET_BASIS_64;
-    for (std::size_t i = 0; i < length; ++i) {
-      hash ^= ptr[i];
-      hash *= FNV_PRIME_64;
-    }
-    return hash;
-  }
-
-  [[nodiscard]] std::optional<Error> Validate() const noexcept {
-    LOG_DEBUG("Validating magic: {:02x} == {:02x} version: {:02x} == {:02x} "
-              "checksum: {:02x} == {:02x}",
-              magic_, MAGIC, version_, VERSION_NUMBER, checksum_, Sum64());
-    if (magic_ == MAGIC && version_ == VERSION_NUMBER && checksum_ == Sum64()) {
-      return std::nullopt;
-    }
-    return Error{"Meta validation failed"};
-  }
-
-private:
-  uint64_t magic_;
-  uint64_t version_;
-  uint32_t page_size_;
-  Pgid freelist_;
-  Pgid buckets_;
-  Pgid watermark_;
-  Txid txid_;
-  uint64_t checksum_;
-};
-
 template <typename T>
 concept IsValidPage =
     std::same_as<T, class LeafPage> || std::same_as<T, class BranchPage>;
@@ -213,4 +164,67 @@ private:
   std::vector<std::byte> buffer_;
 };
 
+class Meta {
+public:
+  [[nodiscard]] Pgid GetWatermark() const noexcept { return watermark_; }
+  [[nodiscard]] Pgid GetBuckets() const noexcept { return buckets_; }
+  void SetMagic(uint64_t magic) noexcept { magic_ = magic; }
+  void SetVersion(uint64_t ver) noexcept { version_ = ver; }
+  void SetPageSize(uint32_t size) noexcept { page_size_ = size; }
+  void SetFreelist(Pgid f) noexcept { freelist_ = f; }
+  void SetBuckets(Pgid b) noexcept { buckets_ = b; }
+  void SetChecksum(uint64_t csum) noexcept { checksum_ = csum; }
+  void SetWatermark(Pgid id) noexcept { watermark_ = id; }
+  void SetTxid(Txid id) noexcept { txid_ = id; }
+  void IncrementTxid() noexcept { txid_++; }
+
+  [[nodiscard]] uint64_t Sum64() const noexcept {
+    constexpr uint64_t FNV_OFFSET_BASIS_64 = 14695981039346656037ULL;
+    constexpr uint64_t FNV_PRIME_64 = 1099511628211;
+
+    const auto *ptr = reinterpret_cast<const uint8_t *>(this);
+    constexpr std::size_t length = offsetof(Meta, checksum_);
+
+    uint64_t hash = FNV_OFFSET_BASIS_64;
+    for (std::size_t i = 0; i < length; ++i) {
+      hash ^= ptr[i];
+      hash *= FNV_PRIME_64;
+    }
+    return hash;
+  }
+
+  void Write(Page &p) noexcept {
+    // Page id is either going to be 0 or 1 which we can determine by the
+    // transaction
+    p.SetId(txid_ % 2);
+    p.SetFlags(PageFlag::MetaPage);
+
+    // Compute and store the checksum before copying data to page
+    checksum_ = Sum64();
+
+    // Write this Meta object into the page memory
+    auto *page_meta = p.GetDataAs<Meta>();
+    *page_meta = *this;
+  }
+
+  [[nodiscard]] std::optional<Error> Validate() const noexcept {
+    LOG_DEBUG("Validating magic: {:02x} == {:02x} version: {:02x} == {:02x} "
+              "checksum: {:02x} == {:02x}",
+              magic_, MAGIC, version_, VERSION_NUMBER, checksum_, Sum64());
+    if (magic_ == MAGIC && version_ == VERSION_NUMBER && checksum_ == Sum64()) {
+      return std::nullopt;
+    }
+    return Error{"Meta validation failed"};
+  }
+
+private:
+  uint64_t magic_;
+  uint64_t version_;
+  uint32_t page_size_;
+  Pgid freelist_;
+  Pgid buckets_;
+  Pgid watermark_;
+  Txid txid_;
+  uint64_t checksum_;
+};
 } // namespace kv
