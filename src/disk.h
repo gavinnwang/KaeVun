@@ -68,7 +68,7 @@ public:
   }
 
   // get page from mmap
-  [[nodiscard]] Page &GetPage(Pgid id) noexcept {
+  [[nodiscard]] Page &GetPageFromMmap(Pgid id) noexcept {
     assert(opened_);
     uint64_t pos = id * page_size_;
 

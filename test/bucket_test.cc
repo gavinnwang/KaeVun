@@ -13,10 +13,23 @@ GetTmpDB(const std::filesystem::path &path = "./db.db") {
 
 TEST(BucketTest, Test1) {
   auto db = GetTmpDB();
-  db->Update([](kv::Tx &tx) -> std::optional<kv::Error> {
-    auto bucket = tx.CreateBucket("buck").value();
-    auto b = tx.GetBucket("bucket").value();
+  auto err = db->Update([](kv::Tx &tx) -> std::optional<kv::Error> {
+    auto bucket_result = tx.CreateBucket("buck");
+    if (!bucket_result.has_value()) {
+      LOG_ERROR("CreateBucket failed: {}", bucket_result.error().message());
+      std::abort();
+    }
+
+    auto bucket_opt = tx.GetBucket("bucket");
+    if (!bucket_opt.has_value()) {
+      LOG_ERROR("GetBucket failed: bucket 'bucket' not found");
+      std::abort();
+    }
+
+    auto &b = bucket_opt.value(); // Safe now
+    auto s = b.Get("Bucket");
     return {};
   });
+  assert(!err);
 }
 } // namespace test

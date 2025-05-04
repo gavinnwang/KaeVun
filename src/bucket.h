@@ -1,5 +1,6 @@
 #pragma once
 
+#include "cursor.h"
 #include "page.h"
 #include "persist.h"
 #include "type.h"
@@ -10,7 +11,6 @@
 #include <unordered_map>
 
 namespace kv {
-
 class Tx;
 
 class BucketMeta {
@@ -29,17 +29,32 @@ private:
 // Bucket associated with a tx
 class Bucket {
 public:
-  explicit Bucket(Tx &tx, const std::string &name, BucketMeta meta)
-      : tx_(tx), name_(name), meta_(std::move(meta)) {}
+  Bucket(TxBPlusTreeHandler &tx_handler, const std::string &name,
+         const BucketMeta &meta) noexcept
+      : tx_handler_(tx_handler), name_(name), meta_(meta) {}
+
+  Bucket(const Bucket &) = delete;
+  Bucket &operator=(const Bucket &) = delete;
+  Bucket(Bucket &&) = default;
+  Bucket &operator=(Bucket &&) = delete;
+  ~Bucket() = default;
 
   [[nodiscard]] const std::string &Name() const noexcept { return name_; }
-
-  [[nodiscard]] Tx &Transaction() const noexcept { return tx_; }
+  [[nodiscard]] bool Writable() const noexcept;
+  [[nodiscard]] Cursor CreateCursor() const noexcept {
+    // todo: if tx is closed return err
+    auto c = Cursor{tx_handler_};
+    return c;
+  }
+  [[nodiscard]] Slice Get(const Slice &key) const noexcept {
+    auto c = CreateCursor();
+    return {};
+  }
 
 private:
-  Tx &tx_;
+  TxBPlusTreeHandler &tx_handler_;
   const std::string &name_;
-  BucketMeta meta_;
+  const BucketMeta &meta_;
 };
 
 // In memory representation of the buckets meta page
@@ -52,14 +67,15 @@ public:
   Buckets(const Buckets &other) = delete;
   Buckets &operator=(const Buckets &other) = delete;
 
+  // Size returns the number of buckets.
   [[nodiscard]] uint16_t Size() const noexcept { return buckets_.size(); }
 
-  [[nodiscard]] std::optional<std::reference_wrapper<BucketMeta>>
-  Bucket(const std::string &name) noexcept {
+  [[nodiscard]] std::optional<std::reference_wrapper<const BucketMeta>>
+  GetBucket(const std::string &name) const noexcept {
     if (buckets_.find(name) == buckets_.end()) {
-      return std::nullopt;
+      return {};
     }
-    return std::ref(buckets_.at(name));
+    return std::cref(buckets_.at(name));
   }
 
 private:

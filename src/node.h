@@ -10,7 +10,7 @@
 namespace kv {
 
 // in memory version of a page
-class Tx;
+class TxBPlusTreeHandler;
 class Node {
 
 public:
@@ -126,7 +126,7 @@ public:
   // ChildAt Returns the child node at a given index.
   Node *ChildAt(int index);
 
-  void SetTx(Tx *tx) { tx_ = tx; }
+  // void SetTxCache(TxCache *tx) { tx_ = tx; }
   void SetParent(Node *parent) { parent_ = parent; }
   void SetDepth(int depth) { depth_ = depth; }
   int GetDepth() const { return depth_; }
@@ -135,7 +135,7 @@ private:
   std::vector<NodeElement> elements_;
   bool is_leaf_;
   int depth_;
-  Tx *tx_;
+  // TxCache *tx_;
   Node *parent_ = nullptr;
 };
 } // namespace kv

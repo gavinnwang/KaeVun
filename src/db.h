@@ -60,6 +60,10 @@ public:
       }
     }
 
+    // set up meta* reference
+    db->meta_ = db->disk_handler_.GetPageFromMmap(0).GetDataAs<Meta>();
+    assert(db->meta_);
+
     // set up page pool
     // set up freelist
     // recover
@@ -80,11 +84,12 @@ public:
   }
 
   std::expected<Tx, Error> Begin(bool writable) noexcept {
-    LOG_INFO("Begin new tx");
     if (writable) {
-      return BeginRTx();
+      LOG_INFO("Begin new read write tx");
+      return BeginRWTx();
     }
-    return BeginRWTx();
+    LOG_INFO("Begin new read tx");
+    return BeginRTx();
   }
 
   std::expected<Tx, Error> BeginRWTx() noexcept {
@@ -118,7 +123,7 @@ public:
   // std::optional<Error> Delete(const Slice &key) noexcept;
   // std::optional<Error> Get(const Slice &key, std::string *output) noexcept;
 
-  std::optional<Error>
+  [[nodiscard]] std::optional<Error>
   Update(const std::function<std::optional<Error>(Tx &)> &fn) noexcept {
     auto tx_or_err = Begin(true);
     if (!tx_or_err)
