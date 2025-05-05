@@ -115,8 +115,8 @@ public:
 
   void SetElement(T e, uint32_t i) noexcept { elements_[i] = e; }
 
-  [[nodiscard]] Slice GetKey(uint32_t i) noexcept {
-    return {reinterpret_cast<std::byte *>(this) + elements_[i].offset_,
+  [[nodiscard]] Slice GetKey(uint32_t i) const noexcept {
+    return {reinterpret_cast<const std::byte *>(this) + elements_[i].offset_,
             elements_[i].ksize_};
   }
 
@@ -133,6 +133,14 @@ public:
     return {reinterpret_cast<std::byte *>(this) + elements_[i].offset_ +
                 elements_[i].ksize_,
             elements_[i].vsize_};
+  }
+  [[nodiscard]] int FindLastLessThan(const Slice &key) const noexcept {
+    for (int i = static_cast<int>(Count()) - 1; i >= 0; --i) {
+      if (GetKey(i) < key) {
+        return i;
+      }
+    }
+    return -1; // key is less than all keys
   }
 };
 

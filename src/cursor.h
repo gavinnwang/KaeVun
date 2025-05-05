@@ -25,13 +25,22 @@ private:
     auto node = TreeNode{p_or_n};
     stack_.push_back(node);
     if (node.IsLeaf()) {
-      // auto index = node.n_->Search(key);
+      if (node.n_) {
+        index_ = node.n_->FindLastLessThan(key) + 1;
+      } else {
+        auto &p = node.p_->AsPage<LeafPage>();
+        index_ = p.FindLastLessThan(key) + 1;
+      }
+    } else {
+      if (node.n_) {
+      }
     }
   }
 
   struct TreeNode {
     Page *p_ = nullptr;
     Node *n_ = nullptr;
+    uint32_t index_;
 
     explicit TreeNode(std::pair<Page *, Node *> pair) noexcept
         : p_{pair.first}, n_{pair.second} {}
