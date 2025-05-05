@@ -42,10 +42,14 @@ public:
     auto c = Cursor{tx_handler_};
     return c;
   }
-  [[nodiscard]] Slice Get(const Slice &key) const noexcept {
+  [[nodiscard]] std::optional<Slice> Get(const Slice &key) const noexcept {
     LOG_INFO("getting {}", key.ToString());
     auto c = CreateCursor();
-    return {};
+    auto [k, v] = c.Seek(key);
+    if (k != key) {
+      return std::nullopt;
+    }
+    return v;
   }
 
 private:

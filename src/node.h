@@ -96,6 +96,17 @@ public:
     }
     return -1; // key < all existing keys
   }
+  [[nodiscard]] std::pair<uint32_t, bool>
+  FindFirstGreaterOrEqualTo(const Slice &key) const noexcept {
+    for (uint32_t i = 0; i < elements_.size(); ++i) {
+      if (!(elements_[i].key_ < key)) { // i.e., elements_[i].key_ >= key
+        bool exact = (elements_[i].key_ == key);
+        return {i, exact};
+      }
+    }
+    // If not found, return size() and false
+    return {static_cast<uint32_t>(elements_.size()), false};
+  }
 
   [[nodiscard]] std::string ToString() const noexcept {
     std::vector<std::string> elements;

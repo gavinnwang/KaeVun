@@ -15,7 +15,7 @@ namespace kv {
 class Tx {
 
 public:
-  Tx(DiskHandler &disk, bool writable, Meta &db_meta) noexcept
+  Tx(DiskHandler &disk, bool writable, Meta db_meta) noexcept
       : open_(true), disk_(disk), tx_handler_(disk), writable_(writable),
         meta_(db_meta),
         buckets_(Buckets{disk.GetPageFromMmap(meta_.GetBuckets())}) {
@@ -94,7 +94,7 @@ private:
   DiskHandler &disk_;
   TxCache tx_handler_;
   bool writable_{false};
-  Meta &meta_;
+  Meta meta_;
   Buckets buckets_;
 };
 } // namespace kv

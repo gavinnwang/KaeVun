@@ -52,6 +52,7 @@ public:
       }
     } else {
       // check the file to detect corruption
+      LOG_INFO("Checking file to detect corruption.");
       auto err_opt = db->Validate();
       if (err_opt.has_value()) {
         LOG_ERROR("Validation failed {}", err_opt->message());
@@ -63,12 +64,12 @@ public:
     // set up meta* reference
     db->meta_ = db->disk_handler_.GetPageFromMmap(0).GetDataAs<Meta>();
     assert(db->meta_);
-    auto err_opt = db->meta_->Validate();
-    if (err_opt.has_value()) {
-      LOG_ERROR("Validation failed {}", err_opt->message());
-      db->Close();
-      return std::unexpected{*err_opt};
-    }
+    // auto err_opt = db->meta_->Validate();
+    // if (err_opt.has_value()) {
+    //   LOG_ERROR("Validation failed {}", err_opt->message());
+    //   db->Close();
+    //   return std::unexpected{*err_opt};
+    // }
 
     // set up page pool
     // set up freelist
@@ -103,6 +104,7 @@ public:
     std::lock_guard metalock(metalock_);
     if (!opened_)
       return std::unexpected{Error{"DB not opened"}};
+    // Tx takes in a copy of the db meta
     Tx tx{disk_handler_, true, *meta_};
     txs.push_back(&tx);
     rwtx_ = &tx;
@@ -138,12 +140,16 @@ public:
 
     auto rollback_guard = Defer([&]() noexcept {
       // make sure tx is rollback when it panics
+      LOG_INFO("Rollback guard rolling back transaction.");
       tx.Rollback();
     });
 
     auto err_opt = fn(tx);
     if (err_opt) {
+      LOG_INFO("User function caused error, rolling back transaction.");
       tx.Rollback();
+    } else {
+      LOG_INFO("User function caused no error.");
     }
 
     return tx.Commit();

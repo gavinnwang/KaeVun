@@ -7,7 +7,7 @@ namespace test {
 [[nodiscard]] kv::DB::RAII_DB
 GetTmpDB(const std::filesystem::path &path = "./db.db") {
   auto db_or_err = kv::DB::Open(path);
-  assert(db_or_err && db_or_err.error().message().c_str());
+  assert(db_or_err);
   return std::move(*db_or_err);
 }
 
@@ -27,7 +27,8 @@ TEST(BucketTest, Test1) {
     }
 
     auto &b = bucket_opt.value(); // Safe now
-    auto s = b.Get("Bucket");
+    auto slice_or_err = b.Get("key1");
+    assert(slice_or_err.has_value());
     return {};
   });
   assert(!err);

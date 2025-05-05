@@ -24,7 +24,7 @@ set(CMAKE_CXX_FLAGS_DEBUG
 
 # Sanitizer flags
 set(CMAKE_CXX_FLAGS_DEBUG
-    "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=undefined -fno-sanitize=alignment"
+    "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=undefined -g -fno-omit-frame-pointer -fno-sanitize=alignment"
 )
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)

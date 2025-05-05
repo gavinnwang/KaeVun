@@ -148,6 +148,20 @@ class BranchPage final : public ElementPage<BranchElement> {
 public:
   ~BranchPage() = delete;
   [[nodiscard]] Pgid GetPgid(uint32_t i) noexcept { return elements_[i].pgid_; }
+
+  [[nodiscard]] std::pair<uint32_t, bool>
+  FindFirstGreaterOrEqualTo(const Slice &key) const noexcept {
+    for (int i = 0; i < static_cast<int>(Count()); ++i) {
+      Slice cur_key = GetKey(i);
+      if (!(cur_key < key)) { // i.e., cur_key >= key
+        bool exact = (cur_key == key);
+        return {i, exact};
+      }
+    }
+    // If all keys are less than the input key, return Count() as insertion
+    // point
+    return {static_cast<int>(Count()), false};
+  }
 };
 
 class PageBuffer final {
