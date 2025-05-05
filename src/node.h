@@ -4,6 +4,7 @@
 #include "page.h"
 #include "persist.h"
 #include "slice.h"
+#include <compare>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -76,25 +77,24 @@ public:
   }
 
   void Put(Slice &key, Slice &val) noexcept {
-    auto index = Search(key);
+    auto index = FindLastLessThan(key) + 1;
     elements_.insert(elements_.begin() + index, {0, key, val});
   }
 
   void Put(Slice &key, Pgid pgid) noexcept {
-    auto index = Search(key);
+    auto index = FindLastLessThan(key) + 1;
     elements_.insert(elements_.begin() + index, {pgid, key, {}});
   }
 
-  uint32_t Search(Slice &key) const noexcept {
-    int index = -1;
-    for (uint32_t i = 0; i < elements_.size(); i++) {
-      if (elements_[i].key_.Compare(key) < 0) {
-        index = i;
-      }
+  // Finds the index of the last element whose key is strictly less than the
+  // given key.
+  // Returns -1 if all the keys are greater than the input key.
+  [[nodiscard]] uint32_t FindLastLessThan(const Slice &key) const noexcept {
+    for (int i = elements_.size() - 1; i >= 0; --i) {
+      if (elements_[i].key_ < key)
+        return i;
     }
-    if (index == -1)
-      index = elements_.size();
-    return index;
+    return -1; // key < all existing keys
   }
 
   [[nodiscard]] std::string ToString() const noexcept {
@@ -133,6 +133,10 @@ public:
   [[nodiscard]] int GetDepth() const noexcept { return depth_; }
 
   [[nodiscard]] bool IsLeaf() const noexcept { return is_leaf_; }
+
+  [[nodiscard]] std::vector<NodeElement> GetElements() const noexcept {
+    return elements_;
+  }
 
 private:
   std::vector<NodeElement> elements_;

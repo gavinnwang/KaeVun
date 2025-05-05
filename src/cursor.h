@@ -3,6 +3,7 @@
 #include "node.h"
 #include "page.h"
 #include "tx_cache.h"
+#include <cstdint>
 #include <utility>
 #include <vector>
 namespace kv {
@@ -24,7 +25,7 @@ private:
     auto node = TreeNode{p_or_n};
     stack_.push_back(node);
     if (node.IsLeaf()) {
-      node.
+      // auto index = node.n_->Search(key);
     }
   }
 
@@ -43,6 +44,7 @@ private:
   };
 
   TxCache &tx_cache_;
+  uint32_t index_;
   Pgid root_;
   std::vector<TreeNode> stack_;
 };

@@ -40,27 +40,36 @@ public:
     return std::string(reinterpret_cast<const char *>(Data()), Size());
   }
 
-  [[nodiscard]] int Compare(const Slice &other) const noexcept {
-    auto min_len = std::min(Size(), other.Size());
-    auto cmp = std::memcmp(Data(), other.Data(), min_len);
-    if (cmp == 0) {
-      if (Size() < other.Size())
-        return -1;
-      if (Size() > other.Size())
-        return 1;
+  [[nodiscard]] std::strong_ordering
+  operator<=>(const Slice &other) const noexcept {
+    const size_t min_len = std::min(Size(), other.Size());
+    const int cmp = std::memcmp(Data(), other.Data(), min_len);
+
+    if (cmp < 0)
+      return std::strong_ordering::less;
+    if (cmp > 0)
+      return std::strong_ordering::greater;
+
+    // If equal up to min_len, shorter slice is less
+    return Size() <=> other.Size();
+  }
+
+  [[nodiscard]] bool operator==(const Slice &other) const noexcept {
+    return (*this <=> other) == std::strong_ordering::equal;
+  }
+
+  [[nodiscard]] std::string ToHex() const {
+    static constexpr char hex_digits[] = "0123456789abcdef";
+    std::string result;
+    result.reserve(Size() * 2);
+
+    for (std::byte b : data_) {
+      unsigned char byte = static_cast<unsigned char>(b);
+      result.push_back(hex_digits[byte >> 4]);
+      result.push_back(hex_digits[byte & 0x0F]);
     }
-    return cmp;
-  }
 
-  [[nodiscard]] friend constexpr bool operator==(const Slice &lhs,
-                                                 const Slice &rhs) noexcept {
-    return lhs.Size() == rhs.Size() &&
-           std::memcmp(lhs.Data(), rhs.Data(), lhs.Size()) == 0;
-  }
-
-  [[nodiscard]] friend constexpr bool operator!=(const Slice &lhs,
-                                                 const Slice &rhs) noexcept {
-    return !(lhs == rhs);
+    return result;
   }
 
 private:
