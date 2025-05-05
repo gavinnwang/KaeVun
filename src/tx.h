@@ -3,10 +3,8 @@
 #include "bucket.h"
 #include "disk.h"
 #include "error.h"
-#include "node.h"
 #include "page.h"
 #include "tx_cache.h"
-#include <cstdint>
 #include <expected>
 #include <optional>
 #include <string>
@@ -16,8 +14,8 @@ class Tx {
 
 public:
   Tx(DiskHandler &disk, bool writable, Meta db_meta) noexcept
-      : open_(true), disk_(disk), tx_handler_(disk), writable_(writable),
-        meta_(db_meta),
+      : open_(true), disk_(disk), tx_handler_(disk, writable),
+        writable_(writable), meta_(db_meta),
         buckets_(Buckets{disk.GetPageFromMmap(meta_.GetBuckets())}) {
     if (writable_) {
       meta_.IncrementTxid();

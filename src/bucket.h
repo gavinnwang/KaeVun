@@ -12,16 +12,6 @@
 
 namespace kv {
 
-class BucketMeta {
-public:
-  BucketMeta(Pgid root) : root_(root) {}
-
-  [[nodiscard]] Pgid Root() const noexcept { return root_; }
-
-private:
-  Pgid root_;
-};
-
 // Bucket associated with a tx
 class Bucket {
 public:
@@ -39,7 +29,7 @@ public:
   [[nodiscard]] bool Writable() const noexcept;
   [[nodiscard]] Cursor CreateCursor() const noexcept {
     // todo: if tx is closed return err
-    auto c = Cursor{tx_handler_};
+    auto c = Cursor{tx_handler_, meta_};
     return c;
   }
   [[nodiscard]] std::optional<Slice> Get(const Slice &key) const noexcept {

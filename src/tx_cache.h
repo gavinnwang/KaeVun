@@ -8,7 +8,8 @@ namespace kv {
 
 class TxCache {
 public:
-  explicit TxCache(DiskHandler &disk) : disk_(disk) {};
+  explicit TxCache(DiskHandler &disk, bool writable)
+      : writable_(writable), disk_(disk) {};
 
   std::vector<Node> &Pending() noexcept { return pending_; }
   std::unordered_map<Pgid, Page *> &Pages() noexcept { return pages_; }
@@ -88,16 +89,21 @@ public:
       return std::unexpected{p_or_err.error()};
     }
     auto p = p_or_err.value();
+    LOG_INFO("Allocated page with id {}, {}", p.get().Id(),
+             static_cast<const void *>(&p.get()));
+    pages_.insert({p.get().Id(), &p.get()});
     return &p.get();
   }
 
 private:
   std::vector<Node> pending_;
-  // Page cache
+  // Dirty pages, only used for write only transactions
+  // This is essentially the shadow pages
   std::unordered_map<Pgid, Page *> pages_{};
   // nodes_ represents the in-memory version of pages allowing for key value
   // changes.
   std::unordered_map<Pgid, Node> nodes_{};
+  const bool writable_;
   DiskHandler &disk_;
 };
 } // namespace kv

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "bucket_meta.h"
+#include "log.h"
 #include "node.h"
 #include "page.h"
 #include "tx_cache.h"
@@ -9,11 +11,12 @@
 namespace kv {
 class Cursor {
 public:
-  Cursor(TxCache &tx_cache) noexcept : tx_cache_(tx_cache) {};
+  Cursor(TxCache &tx_cache, const BucketMeta &b_meta) noexcept
+      : tx_cache_(tx_cache), b_meta_(b_meta) {};
 
   [[nodiscard]] std::pair<Slice, Slice> Seek(const Slice &seek) noexcept {
     stack_.clear();
-    Search(seek, root_);
+    Search(seek, b_meta_.Root());
     return GetKeyValue();
   }
 
@@ -33,10 +36,12 @@ private:
   // Search recursively performs a binary search against a given page/node until
   // it finds a given key
   void Search(const Slice &key, Pgid pgid) {
-    auto p_or_n = tx_cache_.GetPageOrNode(pgid);
-    auto node = TreeNode{p_or_n};
+    LOG_INFO("searching {}", pgid);
+    auto [p, n] = tx_cache_.GetPageOrNode(pgid);
+    auto node = TreeNode{p, n};
     stack_.push_back(node);
     if (node.IsLeaf()) {
+      LOG_INFO("is leaf pid: {}", node.p_->Id());
       if (node.n_) {
         index_ = node.n_->FindLastLessThan(key) + 1;
         node.index_ = index_;
@@ -46,6 +51,7 @@ private:
         node.index_ = index_;
       }
     } else {
+      LOG_INFO("is branch pid: {}", node.p_->Id());
       const auto [index, exact] =
           node.n_
               ? node.n_->FindFirstGreaterOrEqualTo(key)
@@ -69,18 +75,23 @@ private:
     uint32_t index_;
 
     explicit TreeNode(std::pair<Page *, Node *> pair) noexcept
+
         : p_{pair.first}, n_{pair.second} {}
 
+    TreeNode(Page *p, Node *n) noexcept : p_{p}, n_{n} {}
+
     [[nodiscard]] bool IsLeaf() const noexcept {
-      if (n_)
+      if (n_) {
         return n_->IsLeaf();
+      }
+      LOG_INFO("p {}", static_cast<const void *>(p_));
       return (p_->Flags() & static_cast<uint32_t>(PageFlag::LeafPage)) != 0;
     }
   };
 
   TxCache &tx_cache_;
+  const BucketMeta &b_meta_;
   uint32_t index_;
-  Pgid root_;
   std::vector<TreeNode> stack_;
 };
 } // namespace kv
