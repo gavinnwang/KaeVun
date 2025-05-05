@@ -14,7 +14,7 @@ GetTmpDB(const std::filesystem::path &path = "./db.db") {
 TEST(BucketTest, Test1) {
   auto db = GetTmpDB();
   auto err = db->Update([](kv::Tx &tx) -> std::optional<kv::Error> {
-    auto bucket_result = tx.CreateBucket("buck");
+    auto bucket_result = tx.CreateBucket("bucket");
     if (!bucket_result.has_value()) {
       LOG_ERROR("CreateBucket failed: {}", bucket_result.error().message());
       std::abort();

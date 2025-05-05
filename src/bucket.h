@@ -11,25 +11,21 @@
 #include <unordered_map>
 
 namespace kv {
-class Tx;
 
 class BucketMeta {
 public:
-  BucketMeta(Pgid root, uint64_t auto_id) : root_(root), auto_id_(auto_id) {}
+  BucketMeta(Pgid root) : root_(root) {}
 
   [[nodiscard]] Pgid Root() const noexcept { return root_; }
 
-  [[nodiscard]] uint64_t AutoId() const noexcept { return auto_id_; }
-
 private:
   Pgid root_;
-  uint64_t auto_id_;
 };
 
 // Bucket associated with a tx
 class Bucket {
 public:
-  Bucket(TxBPlusTreeHandler &tx_handler, const std::string &name,
+  Bucket(TxCache &tx_handler, const std::string &name,
          const BucketMeta &meta) noexcept
       : tx_handler_(tx_handler), name_(name), meta_(meta) {}
 
@@ -47,12 +43,13 @@ public:
     return c;
   }
   [[nodiscard]] Slice Get(const Slice &key) const noexcept {
+    LOG_INFO("getting {}", key.ToString());
     auto c = CreateCursor();
     return {};
   }
 
 private:
-  TxBPlusTreeHandler &tx_handler_;
+  TxCache &tx_handler_;
   const std::string &name_;
   const BucketMeta &meta_;
 };
@@ -72,10 +69,23 @@ public:
 
   [[nodiscard]] std::optional<std::reference_wrapper<const BucketMeta>>
   GetBucket(const std::string &name) const noexcept {
-    if (buckets_.find(name) == buckets_.end()) {
+    auto b_it = buckets_.find(name);
+    if (b_it == buckets_.end()) {
       return {};
     }
-    return std::cref(buckets_.at(name));
+    return std::cref(b_it->second);
+  }
+
+  // Adds a new bucket. Returns false if the bucket already exists.
+  [[nodiscard]] std::expected<std::reference_wrapper<const BucketMeta>,
+                              std::string>
+  AddBucket(std::string name, BucketMeta meta) noexcept {
+    if (buckets_.find(name) != buckets_.end()) {
+      return std::unexpected{"bucket already exists: " + name};
+    }
+
+    auto [it, _] = buckets_.emplace(std::move(name), std::move(meta));
+    return std::cref(it->second);
   }
 
 private:
@@ -87,7 +97,7 @@ private:
       const auto root = d.Read<Pgid>();
       assert(buckets_.find(name) == buckets_.end() &&
              "bucket names should not be duplicate");
-      buckets_.emplace(std::move(name), BucketMeta{root, auto_id});
+      buckets_.emplace(std::move(name), BucketMeta{root});
     }
   }
 
@@ -97,7 +107,6 @@ private:
     Serializer s{p.Data()};
     for (const auto &[name, b] : buckets_) {
       s.Write(name);
-      s.Write(b.AutoId());
       s.Write(b.Root());
     }
   }

@@ -63,6 +63,12 @@ public:
     // set up meta* reference
     db->meta_ = db->disk_handler_.GetPageFromMmap(0).GetDataAs<Meta>();
     assert(db->meta_);
+    auto err_opt = db->meta_->Validate();
+    if (err_opt.has_value()) {
+      LOG_ERROR("Validation failed {}", err_opt->message());
+      db->Close();
+      return std::unexpected{*err_opt};
+    }
 
     // set up page pool
     // set up freelist

@@ -10,7 +10,6 @@
 namespace kv {
 
 // in memory version of a page
-class TxBPlusTreeHandler;
 class Node {
 
 public:
@@ -121,15 +120,19 @@ public:
     Slice val_;
   };
 
-  Node *Root() noexcept { return parent_ ? parent_->Root() : this; }
+  [[nodiscard]] Node *Root() noexcept {
+    return parent_ ? parent_->Root() : this;
+  }
 
-  // ChildAt Returns the child node at a given index.
-  Node *ChildAt(int index);
+  [[nodiscard]] Node *ChildAt(int index);
 
-  // void SetTxCache(TxCache *tx) { tx_ = tx; }
-  void SetParent(Node *parent) { parent_ = parent; }
-  void SetDepth(int depth) { depth_ = depth; }
-  int GetDepth() const { return depth_; }
+  void SetParent(Node *parent) noexcept { parent_ = parent; }
+
+  void SetDepth(int depth) noexcept { depth_ = depth; }
+
+  [[nodiscard]] int GetDepth() const noexcept { return depth_; }
+
+  [[nodiscard]] bool IsLeaf() const noexcept { return is_leaf_; }
 
 private:
   std::vector<NodeElement> elements_;

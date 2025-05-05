@@ -6,9 +6,9 @@
 #include <vector>
 namespace kv {
 
-class TxBPlusTreeHandler {
+class TxCache {
 public:
-  explicit TxBPlusTreeHandler(DiskHandler &disk) : disk_(&disk) {};
+  explicit TxCache(DiskHandler &disk) : disk_(disk) {};
 
   std::vector<Node> &Pending() noexcept { return pending_; }
   std::unordered_map<Pgid, Page *> &Pages() noexcept { return pages_; }
@@ -22,7 +22,7 @@ public:
       return *it->second;
     }
     // Return directly from the mmap.
-    return disk_->GetPageFromMmap(pgid);
+    return disk_.GetPageFromMmap(pgid);
   }
 
   // GetNode creates a node from a page and associates with a given parent.
@@ -47,6 +47,15 @@ public:
     return node;
   }
 
+  // Returns in-mmeory node if it exists. Otherwise returns the underlying page.
+  [[nodiscard]] std::pair<Page *, Node *>
+  GetPageOrNode(Pgid pgid, Node *parent = nullptr) noexcept {
+    if (auto it = nodes_.find(pgid); it != nodes_.end()) {
+      return {nullptr, std::addressof(it->second)};
+    }
+    return {std::addressof(GetPage(pgid)), nullptr};
+  }
+
   // Write write any dirty pages to disk.
   [[nodiscard]] std::optional<Error> Write() noexcept {
     // Collect dirty pages
@@ -62,14 +71,24 @@ public:
 
     // Write pages to disk in order
     for (const auto p : dirty_pages) {
-      disk_->WritePage(*p);
+      disk_.WritePage(*p);
     }
-    disk_->Sync();
+    disk_.Sync();
 
     // Clear out the page cache.
     pages_.clear();
 
     return {};
+  }
+
+  [[nodiscard]] std::expected<Page *, Error> Allocate(Meta &meta,
+                                                      uint32_t count) {
+    auto p_or_err = disk_.Allocate(meta, count);
+    if (!p_or_err) {
+      return std::unexpected{p_or_err.error()};
+    }
+    auto p = p_or_err.value();
+    return &p.get();
   }
 
 private:
@@ -79,6 +98,6 @@ private:
   // nodes_ represents the in-memory version of pages allowing for key value
   // changes.
   std::unordered_map<Pgid, Node> nodes_{};
-  DiskHandler *disk_;
+  DiskHandler &disk_;
 };
 } // namespace kv

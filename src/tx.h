@@ -18,7 +18,7 @@ public:
   Tx(DiskHandler &disk, bool writable, Meta &db_meta) noexcept
       : open_(true), disk_(disk), tx_handler_(disk), writable_(writable),
         meta_(db_meta),
-        buckets_(Buckets{disk_.GetPageFromMmap(meta_.GetBuckets())}) {
+        buckets_(Buckets{disk.GetPageFromMmap(meta_.GetBuckets())}) {
     if (writable_) {
       meta_.IncrementTxid();
     }
@@ -42,8 +42,7 @@ public:
     if (!b.has_value()) {
       return {};
     }
-
-    return std::make_optional<Bucket>(tx_handler_, name, b.value().get());
+    return Bucket{tx_handler_, name, b.value().get()};
   }
 
   [[nodiscard]] std::expected<BucketMeta, Error>
@@ -61,7 +60,15 @@ public:
       return std::unexpected{Error{"Bucket name required"}};
     }
 
-    return std::unexpected{Error{"Tx not writable"}};
+    auto p_err = tx_handler_.Allocate(meta_, 1);
+    if (!p_err) {
+      return std::unexpected{p_err.error()};
+    }
+    auto p = p_err.value();
+    p->SetFlags(PageFlag::LeafPage);
+    auto b = buckets_.AddBucket(name, BucketMeta{p->Id()});
+    assert(b);
+    return b.value();
   }
 
 private:
@@ -83,13 +90,9 @@ private:
     return {};
   }
 
-  [[nodiscard]] std::expected<Page *, Error> Allocate(uint32_t count) {
-    return nullptr;
-  }
-
   bool open_{false};
   DiskHandler &disk_;
-  TxBPlusTreeHandler tx_handler_;
+  TxCache tx_handler_;
   bool writable_{false};
   Meta &meta_;
   Buckets buckets_;

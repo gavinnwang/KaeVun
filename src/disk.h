@@ -142,7 +142,7 @@ public:
   }
 
   [[nodiscard]] std::expected<std::reference_wrapper<Page>, Error>
-  Allocate(Meta rwtx_meta, uint32_t count) noexcept {
+  Allocate(Meta &rwtx_meta, uint32_t count) noexcept {
     PageBuffer buf{count, page_size_};
     auto &p = buf.GetPage(0);
     p.SetOverflow(count - 1);
