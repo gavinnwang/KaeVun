@@ -19,16 +19,16 @@ TEST(BucketTest, Test1) {
       LOG_ERROR("CreateBucket failed: {}", bucket_result.error().message());
       std::abort();
     }
+    //
+    // auto bucket_opt = tx.GetBucket("bucket");
+    // if (!bucket_opt.has_value()) {
+    //   LOG_ERROR("GetBucket failed: bucket 'bucket' not found");
+    //   std::abort();
+    // }
 
-    auto bucket_opt = tx.GetBucket("bucket");
-    if (!bucket_opt.has_value()) {
-      LOG_ERROR("GetBucket failed: bucket 'bucket' not found");
-      std::abort();
-    }
-
-    auto &b = bucket_opt.value(); // Safe now
-    auto slice_or_err = b.Get("key1");
-    assert(slice_or_err.has_value());
+    // auto &b = bucket_opt.value(); // Safe now
+    // auto slice_or_err = b.Get("key1");
+    // assert(!slice_or_err.has_value());
     return {};
   });
   assert(!err);

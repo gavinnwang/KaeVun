@@ -145,8 +145,8 @@ public:
   // Allocate a shadow page
   [[nodiscard]] std::expected<ShadowPage, Error>
   Allocate(Meta &rwtx_meta, uint32_t count) noexcept {
-    auto buf = PageBuffer(count, page_size_);
-    auto &p = buf.GetPage(0);
+    auto shadow_page = ShadowPage{PageBuffer(count, page_size_)};
+    auto &p = shadow_page.Get();
     p.SetOverflow(count - 1);
 
     // // don't use freelist for now
@@ -155,7 +155,6 @@ public:
     // if (id_opt.has_value()) {
     //   return p;
     // }
-    auto shadow_page = ShadowPage(buf);
 
     auto cur_wm = rwtx_meta.GetWatermark();
     p.SetId(cur_wm);

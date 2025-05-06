@@ -14,13 +14,15 @@ public:
   Cursor(TxCache &tx_cache, const BucketMeta &b_meta) noexcept
       : tx_cache_(tx_cache), b_meta_(b_meta) {};
 
-  [[nodiscard]] std::pair<Slice, Slice> Seek(const Slice &seek) noexcept {
+  [[nodiscard]] std::optional<std::pair<Slice, Slice>>
+  Seek(const Slice &seek) noexcept {
     stack_.clear();
     Search(seek, b_meta_.Root());
     auto node = stack_.back();
-    if (node.index_ >= node)
-      if (index)
-        return GetKeyValue();
+    if (node.index_ >= node.Count()) {
+      return std::nullopt;
+    }
+    return GetKeyValue();
   }
 
 private:
@@ -85,6 +87,11 @@ private:
 
     TreeNode(Page *p, Node *n) noexcept : p_{p}, n_{n} {}
 
+    [[nodiscard]] uint32_t Count() const noexcept {
+      if (n_)
+        return n_->GetElements().size();
+      return p_->Count();
+    }
     [[nodiscard]] bool IsLeaf() const noexcept {
       if (n_) {
         return n_->IsLeaf();

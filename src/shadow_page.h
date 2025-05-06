@@ -8,7 +8,15 @@ namespace kv {
 
 class ShadowPage {
 public:
-  ShadowPage(PageBuffer buf) noexcept : buffer_(std::move(buf)) {}
+  // Constructor of ShadowPage only accepts rvalue
+  ShadowPage(PageBuffer &&buf) noexcept : buffer_(std::move(buf)) {}
+  // prevent copying
+  ShadowPage(const ShadowPage &) = delete;
+  ShadowPage &operator=(const ShadowPage &) = delete;
+
+  // allow moving
+  ShadowPage(ShadowPage &&) noexcept = default;
+  ShadowPage &operator=(ShadowPage &&) noexcept = default;
 
   [[nodiscard]] Page &Get() noexcept { return buffer_.GetPage(0); }
 

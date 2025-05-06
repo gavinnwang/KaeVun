@@ -35,7 +35,10 @@ public:
   [[nodiscard]] std::optional<Slice> Get(const Slice &key) const noexcept {
     LOG_INFO("getting {}", key.ToString());
     auto c = CreateCursor();
-    auto [k, v] = c.Seek(key);
+    auto opt = c.Seek(key);
+    if (!opt.has_value())
+      return std::nullopt;
+    auto [k, v] = opt.value();
     if (k != key) {
       return std::nullopt;
     }

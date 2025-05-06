@@ -12,15 +12,13 @@ public:
       : writable_(writable), disk_(disk) {};
 
   std::vector<Node> &Pending() noexcept { return pending_; }
-  std::unordered_map<Pgid, Page *> &Pages() noexcept { return pages_; }
-  std::unordered_map<Pgid, Node> &Nodes() noexcept { return nodes_; }
 
   // GetPage returns a reference to the page with a given id.
   // If the page has been written to then a temporary bufferred page is
   // returned.
   [[nodiscard]] Page &GetPage(Pgid pgid) noexcept {
-    if (auto it = pages_.find(pgid); it != pages_.end()) {
-      return *it->second;
+    if (auto it = shadow_pages_.find(pgid); it != shadow_pages_.end()) {
+      return it->second.Get();
     }
     // Return directly from the mmap.
     return disk_.GetPageFromMmap(pgid);
@@ -61,8 +59,8 @@ public:
   [[nodiscard]] std::optional<Error> Write() noexcept {
     // Collect dirty pages
     std::vector<Page *> dirty_pages;
-    dirty_pages.reserve(pages_.size());
-    for (const auto &[_, page_ptr] : pages_) {
+    dirty_pages.reserve(shadow_pages_.size());
+    for (const auto &[_, page_ptr] : shadow_pages_) {
       // dirty_pages.push_back(&page_ptr);
     }
 
@@ -77,30 +75,30 @@ public:
     disk_.Sync();
 
     // Clear out the page cache.
-    pages_.clear();
+    shadow_pages_.clear();
 
     return {};
   }
 
   [[nodiscard]] std::expected<std::reference_wrapper<Page>, Error>
-  Allocate(Meta &meta, uint32_t count) {
+  AllocateShadowPage(Meta &meta, uint32_t count) {
     auto p_or_err = disk_.Allocate(meta, count);
     if (!p_or_err) {
       return std::unexpected{p_or_err.error()};
     }
-    auto p = p_or_err.value();
-    LOG_INFO("Allocated page with id {}, {}", p.Get().Id(),
-             static_cast<const void *>(&p.Get()));
+    auto &shadow_page = p_or_err.value();
+    LOG_INFO("Allocated page with id {}, {}", shadow_page.Get().Id(),
+             static_cast<const void *>(&shadow_page.Get()));
     // save to page cache
-    pages_.insert({p.Get().Id(), &p.Get()});
-    return p.Get();
+    shadow_pages_.insert({shadow_page.Get().Id(), std::move(shadow_page)});
+    return shadow_page.Get();
   }
 
 private:
   std::vector<Node> pending_;
   // Dirty pages, only used for write only transactions
   // This is essentially the shadow pages
-  std::unordered_map<Pgid, Page *> pages_{};
+  std::unordered_map<Pgid, ShadowPage> shadow_pages_{};
   // nodes_ represents the in-memory version of pages allowing for key value
   // changes.
   std::unordered_map<Pgid, Node> nodes_{};

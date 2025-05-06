@@ -58,13 +58,13 @@ public:
       return std::unexpected{Error{"Bucket name required"}};
     }
 
-    auto p_err = tx_handler_.Allocate(meta_, 1);
+    auto p_err = tx_handler_.AllocateShadowPage(meta_, 1);
     if (!p_err) {
       return std::unexpected{p_err.error()};
     }
-    auto p = p_err.value();
-    p.get().SetFlags(PageFlag::LeafPage);
-    auto b = buckets_.AddBucket(name, BucketMeta{p.get().Id()});
+    auto &p = p_err.value().get();
+    p.SetFlags(PageFlag::LeafPage);
+    auto b = buckets_.AddBucket(name, BucketMeta{p.Id()});
     assert(b);
     return b.value();
   }
