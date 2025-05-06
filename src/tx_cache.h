@@ -82,17 +82,18 @@ public:
     return {};
   }
 
-  [[nodiscard]] std::expected<Page *, Error> Allocate(Meta &meta,
-                                                      uint32_t count) {
+  [[nodiscard]] std::expected<std::reference_wrapper<Page>, Error>
+  Allocate(Meta &meta, uint32_t count) {
     auto p_or_err = disk_.Allocate(meta, count);
     if (!p_or_err) {
       return std::unexpected{p_or_err.error()};
     }
     auto p = p_or_err.value();
-    LOG_INFO("Allocated page with id {}, {}", p.get().Id(),
-             static_cast<const void *>(&p.get()));
-    pages_.insert({p.get().Id(), &p.get()});
-    return &p.get();
+    LOG_INFO("Allocated page with id {}, {}", p.Get().Id(),
+             static_cast<const void *>(&p.Get()));
+    // save to page cache
+    pages_.insert({p.Get().Id(), &p.Get()});
+    return p.Get();
   }
 
 private:

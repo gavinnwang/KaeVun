@@ -6,6 +6,7 @@
 #include "mmap.h"
 #include "os.h"
 #include "page.h"
+#include "shadow_page.h"
 #include <cstdint>
 #include <expected>
 #include <fstream>
@@ -141,17 +142,20 @@ public:
     return fd_.Sync();
   }
 
-  [[nodiscard]] std::expected<std::reference_wrapper<Page>, Error>
+  // Allocate a shadow page
+  [[nodiscard]] std::expected<ShadowPage, Error>
   Allocate(Meta &rwtx_meta, uint32_t count) noexcept {
-    PageBuffer buf{count, page_size_};
+    auto buf = PageBuffer(count, page_size_);
     auto &p = buf.GetPage(0);
     p.SetOverflow(count - 1);
 
-    auto id_opt = freelist_.Allocate(count);
-    // valid allocation
-    if (id_opt.has_value()) {
-      return p;
-    }
+    // // don't use freelist for now
+    // auto id_opt = freelist_.Allocate(count);
+    // // valid allocation
+    // if (id_opt.has_value()) {
+    //   return p;
+    // }
+    auto shadow_page = ShadowPage(buf);
 
     auto cur_wm = rwtx_meta.GetWatermark();
     p.SetId(cur_wm);
@@ -165,7 +169,7 @@ public:
     }
 
     rwtx_meta.SetWatermark(cur_wm + count);
-    return p;
+    return shadow_page;
   }
 
 private:

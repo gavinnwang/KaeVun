@@ -4,7 +4,6 @@
 #include "page.h"
 #include "persist.h"
 #include "slice.h"
-#include <compare>
 #include <cstddef>
 #include <cstdint>
 #include <vector>

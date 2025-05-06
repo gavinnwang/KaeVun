@@ -17,7 +17,10 @@ public:
   [[nodiscard]] std::pair<Slice, Slice> Seek(const Slice &seek) noexcept {
     stack_.clear();
     Search(seek, b_meta_.Root());
-    return GetKeyValue();
+    auto node = stack_.back();
+    if (node.index_ >= node)
+      if (index)
+        return GetKeyValue();
   }
 
 private:
@@ -47,7 +50,9 @@ private:
         node.index_ = index_;
       } else {
         auto &p = node.p_->AsPage<LeafPage>();
+        LOG_INFO("hi: {}", node.p_->Id());
         index_ = p.FindLastLessThan(key) + 1;
+        LOG_INFO("index: {}", index_);
         node.index_ = index_;
       }
     } else {

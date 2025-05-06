@@ -52,7 +52,7 @@ public:
       return file_sz_or_err.error();
     }
     auto file_sz = file_sz_or_err.value();
-    auto mmap_sz = MmapSize(fmax(min_sz, file_sz));
+    auto mmap_sz = MmapSize(std::max(min_sz, file_sz));
     LOG_INFO("Mmaping size {}", mmap_sz);
 
     // TODO: deference all existing mmap reference which are the nodes

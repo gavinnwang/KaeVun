@@ -63,8 +63,8 @@ public:
       return std::unexpected{p_err.error()};
     }
     auto p = p_err.value();
-    p->SetFlags(PageFlag::LeafPage);
-    auto b = buckets_.AddBucket(name, BucketMeta{p->Id()});
+    p.get().SetFlags(PageFlag::LeafPage);
+    auto b = buckets_.AddBucket(name, BucketMeta{p.get().Id()});
     assert(b);
     return b.value();
   }
