@@ -96,8 +96,7 @@ public:
 
 private:
   std::vector<Node> pending_;
-  // Dirty pages, only used for write only transactions
-  // This is essentially the shadow pages
+  // Dirty shadow pages, only used for write only transactions
   std::unordered_map<Pgid, ShadowPage> shadow_pages_{};
   // nodes_ represents the in-memory version of pages allowing for key value
   // changes.
