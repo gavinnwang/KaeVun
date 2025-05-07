@@ -26,7 +26,7 @@ public:
   ~Bucket() = default;
 
   [[nodiscard]] const std::string &Name() const noexcept { return name_; }
-  [[nodiscard]] bool Writable() const noexcept;
+  // [[nodiscard]] bool Writable() const noexcept { return meta_.;};
   [[nodiscard]] Cursor CreateCursor() const noexcept {
     // todo: if tx is closed return err
     auto c = Cursor{sp_handler_, meta_};
