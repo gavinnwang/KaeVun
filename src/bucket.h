@@ -15,9 +15,9 @@ namespace kv {
 // Bucket associated with a tx
 class Bucket {
 public:
-  Bucket(TxCache &tx_handler, const std::string &name,
+  Bucket(ShadowPageHandler &sp_handler, const std::string &name,
          const BucketMeta &meta) noexcept
-      : tx_handler_(tx_handler), name_(name), meta_(meta) {}
+      : sp_handler_(sp_handler), name_(name), meta_(meta) {}
 
   Bucket(const Bucket &) = delete;
   Bucket &operator=(const Bucket &) = delete;
@@ -29,10 +29,11 @@ public:
   [[nodiscard]] bool Writable() const noexcept;
   [[nodiscard]] Cursor CreateCursor() const noexcept {
     // todo: if tx is closed return err
-    auto c = Cursor{tx_handler_, meta_};
+    auto c = Cursor{sp_handler_, meta_};
     return c;
   }
   [[nodiscard]] std::optional<Slice> Get(const Slice &key) const noexcept {
+    // validations
     LOG_INFO("getting {}", key.ToString());
     auto c = CreateCursor();
     auto opt = c.Seek(key);
@@ -44,9 +45,25 @@ public:
     }
     return v;
   }
+  [[nodiscard]] std::optional<Error> Put(const Slice &key,
+                                         const Slice &val) noexcept {
+    LOG_INFO("putting {}", key.ToString());
+    // validations
+    if (key.Size() == 0) {
+      return Error{"Key size cannot be zero."};
+    }
+    auto c = CreateCursor();
+    auto _ = c.Seek(key);
+    auto &n = c.GetNode();
+    n.Put(key, val);
+
+    LOG_INFO("done putting {} {}", key.ToString(), n.ToString());
+    return {};
+  }
 
 private:
-  TxCache &tx_handler_;
+  // only used for write tx
+  ShadowPageHandler &sp_handler_;
   const std::string &name_;
   const BucketMeta &meta_;
 };
@@ -90,7 +107,6 @@ private:
     Deserializer d(&p);
     for (uint32_t i = 0; i < p.Count(); i++) {
       auto name = d.Read<std::string>();
-      const auto auto_id = d.Read<uint64_t>();
       const auto root = d.Read<Pgid>();
       assert(buckets_.find(name) == buckets_.end() &&
              "bucket names should not be duplicate");

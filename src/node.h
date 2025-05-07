@@ -13,18 +13,25 @@ namespace kv {
 class Node {
 
 public:
+  explicit Node(Node *parent = nullptr) noexcept : parent_(parent) {}
+  // prevent copying
+  Node(const Node &) = delete;
+  Node &operator=(const Node &) = delete;
+
+  // allow moving
+  Node(Node &&) noexcept = default;
+  Node &operator=(Node &&) noexcept = default;
+
   void Read(Page &p) noexcept {
     is_leaf_ = (p.Flags() & static_cast<uint32_t>(PageFlag::LeafPage));
     elements_.resize(p.Count());
     for (uint32_t i = 0; i < p.Count(); i++) {
       if (is_leaf_) {
         LeafPage &leaf_p = p.AsPage<LeafPage>();
-        auto &element = leaf_p.GetElement(i);
         elements_[i].key_ = leaf_p.GetKey(i);
         elements_[i].val_ = leaf_p.GetVal(i);
       } else {
         auto &branch_p = p.AsPage<BranchPage>();
-        auto &elements = branch_p.GetElement(i);
         elements_[i].key_ = branch_p.GetKey(i);
         elements_[i].pgid_ = branch_p.GetPgid(i);
       }
@@ -75,12 +82,14 @@ public:
     }
   }
 
-  void Put(Slice &key, Slice &val) noexcept {
+  // todo change this to own the memory
+  void Put(const Slice &key, const Slice &val) noexcept {
     auto index = FindLastLessThan(key) + 1;
     elements_.insert(elements_.begin() + index, {0, key, val});
   }
 
-  void Put(Slice &key, Pgid pgid) noexcept {
+  // todo change this to own the memory
+  void Put(const Slice &key, Pgid pgid) noexcept {
     auto index = FindLastLessThan(key) + 1;
     elements_.insert(elements_.begin() + index, {pgid, key, {}});
   }
@@ -130,17 +139,21 @@ public:
     Slice val_;
   };
 
-  [[nodiscard]] Node *Root() noexcept {
-    return parent_ ? parent_->Root() : this;
+  [[nodiscard]] Node &Root() noexcept {
+    return parent_ ? parent_->Root() : *this;
   }
-
-  [[nodiscard]] Node *ChildAt(int index);
 
   void SetParent(Node *parent) noexcept { parent_ = parent; }
 
   void SetDepth(int depth) noexcept { depth_ = depth; }
 
-  [[nodiscard]] int GetDepth() const noexcept { return depth_; }
+  [[nodiscard]] Node &GetParent() const noexcept {
+    // parent_ can only be nullptr when it is the root
+    assert(depth_ == 0 || parent_ != nullptr);
+    return *parent_;
+  }
+
+  [[nodiscard]] uint32_t GetDepth() const noexcept { return depth_; }
 
   [[nodiscard]] bool IsLeaf() const noexcept { return is_leaf_; }
 
@@ -151,8 +164,7 @@ public:
 private:
   std::vector<NodeElement> elements_;
   bool is_leaf_;
-  int depth_;
-  // TxCache *tx_;
+  uint32_t depth_;
   Node *parent_ = nullptr;
 };
 } // namespace kv

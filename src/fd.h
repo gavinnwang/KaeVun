@@ -1,6 +1,7 @@
 #pragma once
 
 #include "error.h"
+#include <cassert>
 #include <optional>
 #include <unistd.h>
 
@@ -41,7 +42,8 @@ public:
   Fd(Fd &&other) noexcept : fd_(other.fd_) { other.fd_ = -1; }
   Fd &operator=(Fd &&other) noexcept {
     if (this != &other) {
-      Reset();
+      auto e = Reset();
+      assert(!e);
       fd_ = other.fd_;
       other.fd_ = -1;
     }
@@ -52,7 +54,10 @@ public:
   Fd(const Fd &) = delete;
   Fd &operator=(const Fd &) = delete;
 
-  ~Fd() { Reset(); }
+  ~Fd() {
+    auto e = Reset();
+    assert(!e);
+  }
 
 private:
   int fd_;

@@ -119,7 +119,8 @@ public:
       fs_.close();
     }
     mmap_handle_.Reset();
-    fd_.Reset();
+    auto e = fd_.Reset();
+    assert(!e);
   }
 
   [[nodiscard]] uint32_t PageSize() const noexcept {
@@ -129,8 +130,8 @@ public:
 
   [[nodiscard]] std::optional<Error> WritePageBuffer(PageBuffer &buf,
                                                      Pgid start_pgid) noexcept {
-    return WriteRaw(reinterpret_cast<char *>(buf.GetData().data()),
-                    buf.GetData().size(), start_pgid * page_size_);
+    return WriteRaw(reinterpret_cast<char *>(buf.GetBuffer().data()),
+                    buf.GetBuffer().size(), start_pgid * page_size_);
   }
 
   [[nodiscard]] std::optional<Error> WritePage(Page &p) noexcept {

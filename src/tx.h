@@ -90,7 +90,7 @@ private:
 
   bool open_{false};
   DiskHandler &disk_;
-  TxCache tx_handler_;
+  ShadowPageHandler tx_handler_;
   bool writable_{false};
   Meta meta_;
   Buckets buckets_;

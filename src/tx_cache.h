@@ -6,9 +6,9 @@
 #include <vector>
 namespace kv {
 
-class TxCache {
+class ShadowPageHandler {
 public:
-  explicit TxCache(DiskHandler &disk, bool writable)
+  explicit ShadowPageHandler(DiskHandler &disk, bool writable)
       : writable_(writable), disk_(disk) {};
 
   std::vector<Node> &Pending() noexcept { return pending_; }
@@ -31,11 +31,10 @@ public:
       return it->second;
 
     // 2. Otherwise construct a blank Node in-place inside the map.
-    auto [it, ok] = nodes_.emplace(pgid, Node{});
+    auto [it, ok] = nodes_.emplace(pgid, Node{parent});
+    assert(ok);
     Node &node = it->second;
 
-    // node.SetTxCache(this);
-    node.SetParent(parent);
     if (parent)
       node.SetDepth(parent->GetDepth() + 1);
 
@@ -46,11 +45,16 @@ public:
     return node;
   }
 
+  [[nodiscard]] Node &GetNodeChild(Node &parent, uint32_t index) noexcept {
+    assert(!parent.IsLeaf());
+    return GetNode(parent.GetElements()[index].pgid_, &parent);
+  }
+
   // Returns in-mmeory node if it exists. Otherwise returns the underlying page.
-  [[nodiscard]] std::pair<Page *, Node *>
-  GetPageOrNode(Pgid pgid, Node *parent = nullptr) noexcept {
+  [[nodiscard]] std::pair<Page *, Node *> GetPageOrNode(Pgid pgid) noexcept {
     if (auto it = nodes_.find(pgid); it != nodes_.end()) {
-      return {nullptr, std::addressof(it->second)};
+      LOG_INFO("found node {}", pgid);
+      return {std::addressof(GetPage(pgid)), std::addressof(it->second)};
     }
     return {std::addressof(GetPage(pgid)), nullptr};
   }
@@ -60,8 +64,8 @@ public:
     // Collect dirty pages
     std::vector<Page *> dirty_pages;
     dirty_pages.reserve(shadow_pages_.size());
-    for (const auto &[_, page_ptr] : shadow_pages_) {
-      // dirty_pages.push_back(&page_ptr);
+    for (auto &[_, p] : shadow_pages_) {
+      dirty_pages.push_back(&p.Get());
     }
 
     // Sort pages by their pgid
@@ -70,9 +74,11 @@ public:
 
     // Write pages to disk in order
     for (const auto p : dirty_pages) {
-      disk_.WritePage(*p);
+      auto e = disk_.WritePage(*p);
+      assert(!e);
     }
-    disk_.Sync();
+    auto e = disk_.Sync();
+    assert(!e);
 
     // Clear out the page cache.
     shadow_pages_.clear();
@@ -87,11 +93,12 @@ public:
       return std::unexpected{p_or_err.error()};
     }
     auto &shadow_page = p_or_err.value();
+    auto &p = shadow_page.Get();
     LOG_INFO("Allocated page with id {}, {}", shadow_page.Get().Id(),
              static_cast<const void *>(&shadow_page.Get()));
     // save to page cache
     shadow_pages_.insert({shadow_page.Get().Id(), std::move(shadow_page)});
-    return shadow_page.Get();
+    return p;
   }
 
 private:
@@ -101,7 +108,7 @@ private:
   // nodes_ represents the in-memory version of pages allowing for key value
   // changes.
   std::unordered_map<Pgid, Node> nodes_{};
-  const bool writable_;
+  [[maybe_unused]] const bool writable_;
   DiskHandler &disk_;
 };
 } // namespace kv

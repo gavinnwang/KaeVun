@@ -184,7 +184,10 @@ private:
     leaf_p.SetId(3);
     leaf_p.SetFlags(PageFlag::LeafPage);
 
-    disk_handler_.WritePageBuffer(buf, 0);
+    auto e = disk_handler_.WritePageBuffer(buf, 0);
+    if (e.has_value()) {
+      return e;
+    }
     return disk_handler_.Sync();
   }
 

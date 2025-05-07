@@ -8,10 +8,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <memory>
 #include <optional>
 #include <span>
 #include <type_traits>
-#include <vector>
 
 namespace kv {
 
@@ -167,24 +167,60 @@ public:
 class PageBuffer final {
 public:
   PageBuffer(uint32_t size, uint32_t page_size) noexcept
-      : size_(size), page_size_(page_size), buffer_(size * page_size) {}
+      : size_(size), page_size_(page_size), total_bytes_(size * page_size),
+        buffer_(std::make_unique<std::byte[]>(total_bytes_)) {}
+
+  // Move constructor
+  PageBuffer(PageBuffer &&other) noexcept
+      : size_(other.size_), page_size_(other.page_size_),
+        total_bytes_(other.total_bytes_), buffer_(std::move(other.buffer_)) {
+    other.size_ = 0;
+    other.page_size_ = 0;
+    other.total_bytes_ = 0;
+  }
+
+  // Move assignment
+  PageBuffer &operator=(PageBuffer &&other) noexcept {
+    if (this != &other) {
+      size_ = other.size_;
+      page_size_ = other.page_size_;
+      total_bytes_ = other.total_bytes_;
+      buffer_ = std::move(other.buffer_);
+
+      other.size_ = 0;
+      other.page_size_ = 0;
+      other.total_bytes_ = 0;
+    }
+    return *this;
+  }
+
+  // Delete copy
+  PageBuffer(const PageBuffer &) = delete;
+  PageBuffer &operator=(const PageBuffer &) = delete;
 
   ~PageBuffer() noexcept = default;
 
-  [[nodiscard]] std::vector<std::byte> &GetBuffer() noexcept { return buffer_; }
+  [[nodiscard]] std::span<std::byte> GetBuffer() noexcept {
+    return std::span<std::byte>(buffer_.get(), total_bytes_);
+  }
+
+  [[nodiscard]] std::span<std::byte> GetPageSpan(Pgid pgid) noexcept {
+    assert(pgid < size_);
+    return std::span<std::byte>(buffer_.get() + pgid * page_size_, page_size_);
+  }
 
   [[nodiscard]] Page &GetPage(Pgid pgid) noexcept {
     assert(pgid < size_);
-    return *reinterpret_cast<Page *>(buffer_.data() + pgid * page_size_);
+    return *reinterpret_cast<Page *>(buffer_.get() + pgid * page_size_);
   }
-
-  [[nodiscard]] std::vector<std::byte> &GetData() noexcept { return buffer_; }
 
 private:
   uint32_t size_;
   uint32_t page_size_;
-  std::vector<std::byte> buffer_;
+  uint32_t total_bytes_;
+  std::unique_ptr<std::byte[]> buffer_;
 };
+;
 
 class Meta {
 public:

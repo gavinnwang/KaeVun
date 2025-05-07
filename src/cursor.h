@@ -11,22 +11,54 @@
 namespace kv {
 class Cursor {
 public:
-  Cursor(TxCache &tx_cache, const BucketMeta &b_meta) noexcept
+  Cursor(ShadowPageHandler &tx_cache, const BucketMeta &b_meta) noexcept
       : tx_cache_(tx_cache), b_meta_(b_meta) {};
 
+  // Places the cursor at the node where we would insert the seek slice
+  // After using this method the cursor should always point to a leaf node
   [[nodiscard]] std::optional<std::pair<Slice, Slice>>
   Seek(const Slice &seek) noexcept {
     stack_.clear();
     Search(seek, b_meta_.Root());
     auto node = stack_.back();
-    if (node.index_ >= node.Count()) {
+    if (node.index_ == -1 || (uint32_t)node.index_ >= node.Size()) {
+      PrintStack();
+      LOG_INFO("not found index better than count {} > {}", node.index_,
+               node.Size());
       return std::nullopt;
     }
     return GetKeyValue();
   }
 
+  // Get the current leaf node
+  [[nodiscard]] Node &GetNode() noexcept {
+    assert(!stack_.empty());
+    auto &node = stack_.back();
+    // if the top of the stack is a leaf then just return it
+    if (node.n_) {
+      assert(node.n_->IsLeaf());
+      return *node.n_;
+    }
+    // we only have the page, so we have to construct the node (in memory page)
+    // to do so we need the parent node so we have to start from root and
+    // construct the node from top down we will cache all the nodes along the
+    // way
+    auto cur = stack_[0].n_;
+    if (cur == nullptr) {
+      cur = &tx_cache_.GetNode(stack_[0].p_->Id(), nullptr);
+    }
+    for (int i = 0; i < (int)stack_.size() - 1; i++) {
+      assert(!stack_[i].IsLeaf());
+      cur = &tx_cache_.GetNodeChild(*cur, stack_[i].index_);
+    }
+    assert(cur->IsLeaf());
+    return *cur;
+  }
+
 private:
-  std::pair<Slice, Slice> GetKeyValue() {
+  // Get the key and value that the cursor is pointing at (should be a leaf
+  // element)
+  [[nodiscard]] std::pair<Slice, Slice> GetKeyValue() const noexcept {
     auto node = stack_.back();
     if (node.n_) {
       auto e = node.n_->GetElements()[node.index_];
@@ -43,12 +75,15 @@ private:
   void Search(const Slice &key, Pgid pgid) {
     LOG_INFO("searching {}", pgid);
     auto [p, n] = tx_cache_.GetPageOrNode(pgid);
-    auto node = TreeNode{p, n};
-    stack_.push_back(node);
+    stack_.push_back(TreeNode{p, n});
+    auto &node = stack_.back();
     if (node.IsLeaf()) {
       LOG_INFO("is leaf pid: {}", node.p_->Id());
       if (node.n_) {
+        LOG_INFO("node : {}", node.n_->ToString());
         index_ = node.n_->FindLastLessThan(key) + 1;
+        LOG_INFO("node : {}, index: {}, search key: {}", node.n_->ToString(),
+                 index_, key.ToString());
         node.index_ = index_;
       } else {
         auto &p = node.p_->AsPage<LeafPage>();
@@ -79,7 +114,7 @@ private:
   struct TreeNode {
     Page *p_ = nullptr;
     Node *n_ = nullptr;
-    uint32_t index_;
+    int32_t index_{-1};
 
     explicit TreeNode(std::pair<Page *, Node *> pair) noexcept
 
@@ -87,7 +122,7 @@ private:
 
     TreeNode(Page *p, Node *n) noexcept : p_{p}, n_{n} {}
 
-    [[nodiscard]] uint32_t Count() const noexcept {
+    [[nodiscard]] uint32_t Size() const noexcept {
       if (n_)
         return n_->GetElements().size();
       return p_->Count();
@@ -100,8 +135,24 @@ private:
       return (p_->Flags() & static_cast<uint32_t>(PageFlag::LeafPage)) != 0;
     }
   };
+  void PrintStack() const noexcept {
+    LOG_INFO("=== Cursor Stack Trace ===");
+    for (size_t i = 0; i < stack_.size(); ++i) {
+      const auto &node = stack_[i];
+      if (node.n_) {
+        LOG_INFO("[{}] Node: ptr={}, index={}, leaf={}, elements={}", i,
+                 static_cast<const void *>(node.n_), node.index_,
+                 node.n_->IsLeaf(), node.n_->GetElements().size());
+      } else {
+        LOG_INFO("[{}] Page: id={}, index={}, leaf={}, count={}", i,
+                 node.p_ ? node.p_->Id() : 0, node.index_, node.IsLeaf(),
+                 node.p_ ? node.p_->Count() : 0);
+      }
+    }
+    LOG_INFO("=== End Stack Trace ===");
+  }
 
-  TxCache &tx_cache_;
+  ShadowPageHandler &tx_cache_;
   const BucketMeta &b_meta_;
   uint32_t index_;
   std::vector<TreeNode> stack_;
