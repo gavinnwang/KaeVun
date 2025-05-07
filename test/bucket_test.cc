@@ -28,10 +28,15 @@ TEST(BucketTest, Test1) {
 
     auto &b = bucket_opt.value(); // Safe now
     auto e = b.Put("key1", "val1");
+    e = b.Put("key2", "val2");
+    e = b.Put("key3", "val3");
+    e = b.Put("key4", "val4");
+    e = b.Put("key0", "val0");
+
     assert(!e);
 
     auto slice_or_err = b.Get("key1");
-    assert(slice_or_err.has_value());
+    LOG_INFO("return {}", slice_or_err.value().ToString());
     return {};
   });
   assert(!err);

@@ -31,7 +31,10 @@ public:
 
   [[nodiscard]] bool Writable() const noexcept { return writable_; }
 
-  [[nodiscard]] std::optional<Error> Commit() noexcept { return std::nullopt; }
+  [[nodiscard]] std::optional<Error> Commit() noexcept {
+    LOG_INFO("Transaction committing");
+    return std::nullopt;
+  }
 
   // GetBucket retrievs the bucket with given name
   [[nodiscard]] std::optional<Bucket>

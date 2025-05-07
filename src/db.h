@@ -138,11 +138,11 @@ public:
       return tx_or_err.error();
     auto &tx = tx_or_err.value();
 
-    auto rollback_guard = Defer([&]() noexcept {
-      // make sure tx is rollback when it panics
-      LOG_INFO("Rollback guard rolling back transaction.");
-      tx.Rollback();
-    });
+    // auto rollback_guard = Defer([&]() noexcept {
+    //   // make sure tx is rollback when it panics
+    //   LOG_INFO("Rollback guard rolling back transaction.");
+    //   tx.Rollback();
+    // });
 
     auto err_opt = fn(tx);
     if (err_opt) {
