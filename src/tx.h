@@ -33,7 +33,7 @@ public:
 
   [[nodiscard]] std::optional<Error> Commit() noexcept {
     LOG_INFO("Transaction committing");
-    return std::nullopt;
+    tx_handler_.Write() return std::nullopt;
   }
 
   // GetBucket retrievs the bucket with given name

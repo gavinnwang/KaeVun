@@ -1,6 +1,7 @@
 #pragma once
 #include "disk.h"
 #include "node.h"
+#include "page.h"
 #include "type.h"
 #include <unordered_map>
 #include <vector>
@@ -99,6 +100,27 @@ public:
     // save to page cache
     shadow_pages_.insert({shadow_page.Get().Id(), std::move(shadow_page)});
     return p;
+  }
+
+  [[nodiscard]] std::vector<Node> SplitNode(Node &n) noexcept {
+    // Ignore the split if the node doesn't have at least enough elements for
+    // multiple pages or if the data can fit on a single page.
+    if (n.GetElements().size() <= MIN_KEY_PER_PAGE * 2 || n.Get)
+      return {};
+  }
+
+  [[nodiscard]] std::optional<Error> Spill() noexcept {
+    std::vector<Node *> nodes;
+    for (auto &[_, n] : nodes_) {
+      nodes.push_back(&n);
+    }
+    // Sort by descending depth
+    std::sort(nodes.begin(), nodes.end(),
+              [](Node *a, Node *b) { return a->GetDepth() > b->GetDepth(); });
+
+    for (Node *n : nodes) {
+    }
+    return {};
   }
 
 private:

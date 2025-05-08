@@ -21,6 +21,7 @@ constexpr uint32_t MAGIC = 0xED0CDAED;
 constexpr Pgid META_PAGE_ID = 0;
 constexpr Pgid FREELIST_PAGE_ID = 1;
 constexpr Pgid BUCKET_PAGE_ID = 2;
+constexpr uint32_t MIN_KEY_PER_PAGE = 2;
 
 enum class PageFlag : uint32_t {
   None = 0x00,
@@ -81,6 +82,8 @@ protected:
   uint32_t overflow_;
   uint32_t count_;
 };
+
+constexpr std::size_t PAGE_HEADER_SIZE = sizeof(Page);
 
 struct LeafElement {
   uint32_t offset_; // the offset between the start of page and the start of

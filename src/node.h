@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <vector>
+
 namespace kv {
 
 // in memory version of a page
@@ -157,6 +158,10 @@ public:
 
   [[nodiscard]] bool IsLeaf() const noexcept { return is_leaf_; }
 
+  [[nodiscard]] std::optional<Pgid> GetPgid() const noexcept { return pgid_; }
+
+  void SetPgid(Pgid pgid) noexcept { pgid_ = pgid; }
+
   [[nodiscard]] std::vector<NodeElement> GetElements() const noexcept {
     return elements_;
   }
@@ -165,6 +170,10 @@ private:
   std::vector<NodeElement> elements_;
   bool is_leaf_;
   uint32_t depth_;
+  // The node has empty pgid if it is newly created and hasn't claimed a page id
+  // yet
+  // todo
+  std::optional<Pgid> pgid_;
   Node *parent_ = nullptr;
 };
 } // namespace kv
