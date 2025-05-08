@@ -35,11 +35,11 @@ public:
     std::copy(ids.begin(), ids.end(), p.GetDataAs<Pgid>());
   }
 
-  [[nodiscard]] std::optional<Pgid> Allocate(uint32_t count) noexcept {
+  [[nodiscard]] std::optional<Pgid> Allocate(std::size_t count) noexcept {
     // the count of ids in the current continuous segment
-    uint32_t cnt = 0;
+    std::size_t cnt = 0;
     Pgid prev_id = 0;
-    for (uint32_t i = 0; i < ids_.size(); ++i) {
+    for (std::size_t i = 0; i < ids_.size(); ++i) {
       auto id = ids_[i];
       // if the current is no longer continuous, reset
       if (prev_id != id - 1) {

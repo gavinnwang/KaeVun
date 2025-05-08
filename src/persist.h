@@ -20,23 +20,23 @@ public:
   }
 
   void Write(const std::string &data) noexcept {
-    uint32_t sz = static_cast<uint32_t>(data.size());
-    Write<uint32_t>(sz);
+    std::size_t sz = static_cast<std::size_t>(data.size());
+    Write<std::size_t>(sz);
     std::memcpy(ptr_ + offset_, data.data(), data.size());
     offset_ += data.size();
   }
 
-  void WriteBytes(const void *src, uint32_t size) noexcept {
+  void WriteBytes(const void *src, std::size_t size) noexcept {
     std::memcpy(ptr_ + offset_, src, size);
     offset_ += size;
   }
 
-  void Seek(uint32_t new_offset) noexcept { offset_ = new_offset; }
-  uint32_t Offset() const noexcept { return offset_; }
+  void Seek(std::size_t new_offset) noexcept { offset_ = new_offset; }
+  std::size_t Offset() const noexcept { return offset_; }
 
 private:
   std::byte *ptr_;
-  uint32_t offset_;
+  std::size_t offset_;
 };
 
 class Deserializer {
@@ -51,7 +51,7 @@ public:
   }
 
   template <> std::string Read<std::string>() noexcept {
-    uint32_t sz = Read<uint32_t>();
+    std::size_t sz = Read<std::size_t>();
     const char *data_ptr = reinterpret_cast<const char *>(ptr_ + offset_);
     std::string str(data_ptr, sz);
     offset_ += sz;
@@ -60,7 +60,7 @@ public:
 
 private:
   const std::byte *ptr_;
-  uint32_t offset_;
+  std::size_t offset_;
 };
 
 } // namespace kv

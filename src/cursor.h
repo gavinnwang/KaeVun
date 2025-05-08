@@ -21,7 +21,7 @@ public:
     stack_.clear();
     Search(seek, b_meta_.Root());
     auto node = stack_.back();
-    if (node.index_ == -1 || (uint32_t)node.index_ >= node.Size()) {
+    if (node.index_ == -1 || (std::size_t)node.index_ >= node.Size()) {
       PrintStack();
       LOG_INFO("not found index better than count {} > {}", node.index_,
                node.Size());
@@ -99,7 +99,7 @@ private:
               ? node.n_->FindFirstGreaterOrEqualTo(key)
               : node.p_->AsPage<BranchPage>().FindFirstGreaterOrEqualTo(key);
 
-      uint32_t adjusted_index = (!exact && index > 0) ? index - 1 : index;
+      std::size_t adjusted_index = (!exact && index > 0) ? index - 1 : index;
       stack_.back().index_ = adjusted_index;
 
       Pgid child_pgid =
@@ -122,7 +122,7 @@ private:
 
     TreeNode(Page *p, Node *n) noexcept : p_{p}, n_{n} {}
 
-    [[nodiscard]] uint32_t Size() const noexcept {
+    [[nodiscard]] std::size_t Size() const noexcept {
       if (n_)
         return n_->GetElements().size();
       return p_->Count();
@@ -132,7 +132,7 @@ private:
         return n_->IsLeaf();
       }
       LOG_INFO("p {}", static_cast<const void *>(p_));
-      return (p_->Flags() & static_cast<uint32_t>(PageFlag::LeafPage)) != 0;
+      return (p_->Flags() & static_cast<std::size_t>(PageFlag::LeafPage)) != 0;
     }
   };
   void PrintStack() const noexcept {
@@ -154,7 +154,7 @@ private:
 
   ShadowPageHandler &tx_cache_;
   const BucketMeta &b_meta_;
-  uint32_t index_;
+  std::size_t index_;
   std::vector<TreeNode> stack_;
 };
 } // namespace kv

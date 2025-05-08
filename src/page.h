@@ -15,15 +15,15 @@
 
 namespace kv {
 
-constexpr uint64_t VERSION_NUMBER = 1;
-constexpr uint32_t MAGIC = 0xED0CDAED;
+constexpr std::size_t VERSION_NUMBER = 1;
+constexpr std::size_t MAGIC = 0xED0CDAED;
 
 constexpr Pgid META_PAGE_ID = 0;
 constexpr Pgid FREELIST_PAGE_ID = 1;
 constexpr Pgid BUCKET_PAGE_ID = 2;
-constexpr uint32_t MIN_KEY_PER_PAGE = 2;
+constexpr std::size_t MIN_KEY_PER_PAGE = 2;
 
-enum class PageFlag : uint32_t {
+enum class PageFlag : std::size_t {
   None = 0x00,
   BranchPage = 0x01,
   LeafPage = 0x02,
@@ -48,15 +48,15 @@ public:
 
   void SetId(Pgid id) noexcept { pgid_ = id; }
   void SetFlags(PageFlag flags) noexcept {
-    flags_ = static_cast<uint32_t>(flags);
+    flags_ = static_cast<std::size_t>(flags);
   }
-  void SetCount(uint32_t count) noexcept { count_ = count; }
-  void SetOverflow(uint32_t overflow) noexcept { overflow_ = overflow; }
+  void SetCount(std::size_t count) noexcept { count_ = count; }
+  void SetOverflow(std::size_t overflow) noexcept { overflow_ = overflow; }
 
-  [[nodiscard]] uint32_t Count() const noexcept { return count_; }
-  [[nodiscard]] uint32_t Flags() const noexcept { return flags_; }
+  [[nodiscard]] std::size_t Count() const noexcept { return count_; }
+  [[nodiscard]] std::size_t Flags() const noexcept { return flags_; }
   [[nodiscard]] Pgid Id() const noexcept { return pgid_; }
-  [[nodiscard]] uint32_t Overflow() const noexcept { return overflow_; }
+  [[nodiscard]] std::size_t Overflow() const noexcept { return overflow_; }
 
   template <typename T> [[nodiscard]] T *GetDataAs() noexcept {
     return reinterpret_cast<T *>(Data());
@@ -78,23 +78,22 @@ public:
 
 protected:
   Pgid pgid_;
-  uint32_t flags_;
-  uint32_t overflow_;
-  uint32_t count_;
+  std::size_t flags_;
+  std::size_t overflow_;
+  std::size_t count_;
 };
-
 constexpr std::size_t PAGE_HEADER_SIZE = sizeof(Page);
 
 struct LeafElement {
-  uint32_t offset_; // the offset between the start of page and the start of
-                    // the key address
-  uint32_t ksize_;
-  uint32_t vsize_;
+  std::size_t offset_; // the offset between the start of page and the start of
+                       // the key address
+  std::size_t ksize_;
+  std::size_t vsize_;
 };
 
 struct BranchElement {
-  uint32_t offset_;
-  uint32_t ksize_;
+  std::size_t offset_;
+  std::size_t ksize_;
   Pgid pgid_;
 };
 
@@ -114,11 +113,11 @@ public:
     return {&elements_[0], count_};
   }
 
-  [[nodiscard]] T &GetElement(uint32_t i) noexcept { return elements_[i]; }
+  [[nodiscard]] T &GetElement(std::size_t i) noexcept { return elements_[i]; }
 
-  void SetElement(T e, uint32_t i) noexcept { elements_[i] = e; }
+  void SetElement(T e, std::size_t i) noexcept { elements_[i] = e; }
 
-  [[nodiscard]] Slice GetKey(uint32_t i) const noexcept {
+  [[nodiscard]] Slice GetKey(std::size_t i) const noexcept {
     return {reinterpret_cast<const std::byte *>(this) + elements_[i].offset_,
             elements_[i].ksize_};
   }
@@ -132,7 +131,7 @@ protected:
 class LeafPage final : public ElementPage<LeafElement> {
 public:
   ~LeafPage() = delete;
-  [[nodiscard]] Slice GetVal(uint32_t i) noexcept {
+  [[nodiscard]] Slice GetVal(std::size_t i) noexcept {
     return {reinterpret_cast<std::byte *>(this) + elements_[i].offset_ +
                 elements_[i].ksize_,
             elements_[i].vsize_};
@@ -150,9 +149,11 @@ public:
 class BranchPage final : public ElementPage<BranchElement> {
 public:
   ~BranchPage() = delete;
-  [[nodiscard]] Pgid GetPgid(uint32_t i) noexcept { return elements_[i].pgid_; }
+  [[nodiscard]] Pgid GetPgid(std::size_t i) noexcept {
+    return elements_[i].pgid_;
+  }
 
-  [[nodiscard]] std::pair<uint32_t, bool>
+  [[nodiscard]] std::pair<std::size_t, bool>
   FindFirstGreaterOrEqualTo(const Slice &key) const noexcept {
     for (int i = 0; i < static_cast<int>(Count()); ++i) {
       Slice cur_key = GetKey(i);
@@ -169,7 +170,7 @@ public:
 
 class PageBuffer final {
 public:
-  PageBuffer(uint32_t size, uint32_t page_size) noexcept
+  PageBuffer(std::size_t size, std::size_t page_size) noexcept
       : size_(size), page_size_(page_size), total_bytes_(size * page_size),
         buffer_(std::make_unique<std::byte[]>(total_bytes_)) {}
 
@@ -218,9 +219,9 @@ public:
   }
 
 private:
-  uint32_t size_;
-  uint32_t page_size_;
-  uint32_t total_bytes_;
+  std::size_t size_;
+  std::size_t page_size_;
+  std::size_t total_bytes_;
   std::unique_ptr<std::byte[]> buffer_;
 };
 ;
@@ -229,24 +230,24 @@ class Meta {
 public:
   [[nodiscard]] Pgid GetWatermark() const noexcept { return watermark_; }
   [[nodiscard]] Pgid GetBuckets() const noexcept { return buckets_; }
-  void SetMagic(uint64_t magic) noexcept { magic_ = magic; }
-  void SetVersion(uint64_t ver) noexcept { version_ = ver; }
-  void SetPageSize(uint32_t size) noexcept { page_size_ = size; }
+  void SetMagic(std::size_t magic) noexcept { magic_ = magic; }
+  void SetVersion(std::size_t ver) noexcept { version_ = ver; }
+  void SetPageSize(std::size_t size) noexcept { page_size_ = size; }
   void SetFreelist(Pgid f) noexcept { freelist_ = f; }
   void SetBuckets(Pgid b) noexcept { buckets_ = b; }
-  void SetChecksum(uint64_t csum) noexcept { checksum_ = csum; }
+  void SetChecksum(std::size_t csum) noexcept { checksum_ = csum; }
   void SetWatermark(Pgid id) noexcept { watermark_ = id; }
   void SetTxid(Txid id) noexcept { txid_ = id; }
   void IncrementTxid() noexcept { txid_++; }
 
-  [[nodiscard]] uint64_t Sum64() const noexcept {
-    constexpr uint64_t FNV_OFFSET_BASIS_64 = 14695981039346656037ULL;
-    constexpr uint64_t FNV_PRIME_64 = 1099511628211;
+  [[nodiscard]] std::size_t Sum64() const noexcept {
+    constexpr std::size_t FNV_OFFSET_BASIS_64 = 14695981039346656037ULL;
+    constexpr std::size_t FNV_PRIME_64 = 1099511628211;
 
     const auto *ptr = reinterpret_cast<const uint8_t *>(this);
     constexpr std::size_t length = offsetof(Meta, checksum_);
 
-    uint64_t hash = FNV_OFFSET_BASIS_64;
+    std::size_t hash = FNV_OFFSET_BASIS_64;
     for (std::size_t i = 0; i < length; ++i) {
       hash ^= ptr[i];
       hash *= FNV_PRIME_64;
@@ -279,13 +280,13 @@ public:
   }
 
 private:
-  uint64_t magic_;
-  uint64_t version_;
-  uint32_t page_size_;
+  std::size_t magic_;
+  std::size_t version_;
+  std::size_t page_size_;
   Pgid freelist_;
   Pgid buckets_;
   Pgid watermark_;
   Txid txid_;
-  uint64_t checksum_;
+  std::size_t checksum_;
 };
 } // namespace kv

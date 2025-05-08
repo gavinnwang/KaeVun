@@ -46,7 +46,7 @@ public:
     return node;
   }
 
-  [[nodiscard]] Node &GetNodeChild(Node &parent, uint32_t index) noexcept {
+  [[nodiscard]] Node &GetNodeChild(Node &parent, std::size_t index) noexcept {
     assert(!parent.IsLeaf());
     return GetNode(parent.GetElements()[index].pgid_, &parent);
   }
@@ -88,7 +88,7 @@ public:
   }
 
   [[nodiscard]] std::expected<std::reference_wrapper<Page>, Error>
-  AllocateShadowPage(Meta &meta, uint32_t count) {
+  AllocateShadowPage(Meta &meta, std::size_t count) {
     auto p_or_err = disk_.Allocate(meta, count);
     if (!p_or_err) {
       return std::unexpected{p_or_err.error()};

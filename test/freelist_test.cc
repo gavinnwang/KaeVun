@@ -33,7 +33,7 @@ TEST(FreelistTest, Test1) {
 
   f.Write(p);
   ASSERT_EQ(p.Id(), kv::FREELIST_PAGE_ID);
-  ASSERT_EQ(p.Flags(), static_cast<uint32_t>(kv::PageFlag::FreelistPage));
+  ASSERT_EQ(p.Flags(), static_cast<std::size_t>(kv::PageFlag::FreelistPage));
   ASSERT_EQ(p.Count(), 4);
 
   kv::Freelist f1{};

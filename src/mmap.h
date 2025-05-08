@@ -4,7 +4,6 @@
 #include "log.h"
 #include "os.h"
 #include <cassert>
-#include <cstdint>
 #include <mutex>
 #include <optional>
 #include <sys/mman.h>
@@ -17,7 +16,7 @@ class MmapDataHandle {
 public:
   MmapDataHandle() = default;
 
-  explicit MmapDataHandle(uint64_t page_size) noexcept
+  explicit MmapDataHandle(std::size_t page_size) noexcept
       : page_size_(page_size) {}
 
   MmapDataHandle(const MmapDataHandle &) = delete;
@@ -45,7 +44,7 @@ public:
   ~MmapDataHandle() { Unmap(); }
 
   [[nodiscard]] std::optional<Error> Mmap(std::filesystem::path path, int fd,
-                                          uint64_t min_sz) noexcept {
+                                          std::size_t min_sz) noexcept {
     std::lock_guard mmaplock(mmaplock_);
     auto file_sz_or_err = OS::FileSize(path);
     if (!file_sz_or_err) {
@@ -77,18 +76,18 @@ public:
     return std::nullopt;
   }
 
-  [[nodiscard]] uint64_t MmapSize(uint64_t request_sz) const noexcept {
-    uint64_t step = 1 << 30; // 1GB
+  [[nodiscard]] std::size_t MmapSize(std::size_t request_sz) const noexcept {
+    std::size_t step = 1 << 30; // 1GB
     if (request_sz <= step) {
-      for (uint32_t i = 15; i <= 30; ++i) {
+      for (std::size_t i = 15; i <= 30; ++i) {
         if (request_sz <= 1 << i) {
           return 1 << i;
         }
       }
       return step;
     } else {
-      uint64_t sz = request_sz;
-      uint64_t remainder = request_sz % step;
+      std::size_t sz = request_sz;
+      std::size_t remainder = request_sz % step;
       if (step > 0)
         sz += step - remainder;
 
@@ -101,7 +100,7 @@ public:
   }
 
   [[nodiscard]] void *MmapPtr() const noexcept { return mmap_ptr_; }
-  [[nodiscard]] uint64_t Size() const noexcept { return size_; }
+  [[nodiscard]] std::size_t Size() const noexcept { return size_; }
   [[nodiscard]] bool Valid() const noexcept { return mmap_ptr_ != nullptr; }
 
   void Reset() noexcept {
@@ -119,7 +118,7 @@ public:
     }
   }
 
-  // std::optional<Error> Grow(uint64_t new_sz) noexcept {
+  // std::optional<Error> Grow(std::size_t new_sz) noexcept {
   //   if (!Valid())
   //     return Error{"Invalid mmap ptr"};
   //     assert(new_sz > size_);
@@ -127,9 +126,9 @@ public:
   // }
 
 private:
-  uint32_t page_size_{OS::DEFAULT_PAGE_SIZE};
+  std::size_t page_size_{OS::DEFAULT_PAGE_SIZE};
   void *mmap_ptr_{nullptr};
-  uint64_t size_{0};
+  std::size_t size_{0};
   // mutex to protect mmap access
   std::mutex mmaplock_;
 };

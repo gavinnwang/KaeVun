@@ -15,11 +15,11 @@
 namespace kv {
 
 class DiskHandler final {
-  static constexpr uint64_t INIT_MMAP_SIZE = 1 << 30;
+  static constexpr std::size_t INIT_MMAP_SIZE = 1 << 30;
 
 public:
   DiskHandler() noexcept = default;
-  [[nodiscard]] std::expected<uint64_t, Error>
+  [[nodiscard]] std::expected<std::size_t, Error>
   Open(std::filesystem::path path) noexcept {
     constexpr auto flags = (O_RDWR | O_CREAT);
     constexpr auto mode = 0666;
@@ -71,7 +71,7 @@ public:
   // get page from mmap
   [[nodiscard]] Page &GetPageFromMmap(Pgid id) noexcept {
     assert(opened_);
-    uint64_t pos = id * page_size_;
+    std::size_t pos = id * page_size_;
 
     assert(mmap_handle_.Valid() && pos + sizeof(Page) <= mmap_handle_.Size());
 
@@ -81,12 +81,12 @@ public:
     return *reinterpret_cast<Page *>(GetAddress(pos));
   }
 
-  [[nodiscard]] void *GetAddress(uint64_t pos) const noexcept {
+  [[nodiscard]] void *GetAddress(std::size_t pos) const noexcept {
     return static_cast<std::byte *>(mmap_handle_.MmapPtr()) + pos;
   }
 
   [[nodiscard]] std::expected<PageBuffer, Error>
-  CreatePageBufferFromDisk(uint32_t offset, uint32_t size) noexcept {
+  CreatePageBufferFromDisk(std::size_t offset, std::size_t size) noexcept {
     assert(opened_);
     if (!fs_.is_open()) {
       return std::unexpected{Error{"Fs is not open"}};
@@ -123,7 +123,7 @@ public:
     assert(!e);
   }
 
-  [[nodiscard]] uint32_t PageSize() const noexcept {
+  [[nodiscard]] std::size_t PageSize() const noexcept {
     assert(opened_);
     return page_size_;
   }
@@ -145,7 +145,7 @@ public:
 
   // Allocate a shadow page
   [[nodiscard]] std::expected<ShadowPage, Error>
-  Allocate(Meta &rwtx_meta, uint32_t count) noexcept {
+  Allocate(Meta &rwtx_meta, std::size_t count) noexcept {
     auto shadow_page = ShadowPage{PageBuffer(count, page_size_)};
     auto &p = shadow_page.Get();
     p.SetOverflow(count - 1);
@@ -174,7 +174,7 @@ public:
 
 private:
   [[nodiscard]] std::optional<Error> WriteRaw(const char *data, size_t size,
-                                              uint64_t offset) noexcept {
+                                              std::size_t offset) noexcept {
     fs_.seekp(offset);
     fs_.write(data, size);
     if (fs_.fail()) {
@@ -192,7 +192,7 @@ private:
   // file descriptor handle
   Fd fd_;
   // page size of the db
-  uint32_t page_size_{OS::DEFAULT_PAGE_SIZE};
+  std::size_t page_size_{OS::DEFAULT_PAGE_SIZE};
   // mutex to protect mmap access
   std::mutex mmaplock_;
   // mmap handle that will unmap when released

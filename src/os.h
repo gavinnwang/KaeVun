@@ -16,18 +16,18 @@
 namespace kv {
 class OS {
 public:
-  static constexpr uint32_t DEFAULT_PAGE_SIZE = 4096;
+  static constexpr std::size_t DEFAULT_PAGE_SIZE = 4096;
 
-  static uint32_t OSPageSize() noexcept {
+  static std::size_t OSPageSize() noexcept {
     // Initialize static var
-    static uint32_t page_size = InitializePageSize();
+    static std::size_t page_size = InitializePageSize();
 
     LOG_INFO("OS page size: {}", page_size);
 
     return page_size;
   }
 
-  static std::expected<uint64_t, Error>
+  static std::expected<std::size_t, Error>
   FileSize(const std::filesystem::path &path) noexcept {
     std::error_code ec;
     auto file_sz = std::filesystem::file_size(path, ec);
@@ -39,19 +39,19 @@ public:
   }
 
 private:
-  static uint32_t InitializePageSize() noexcept {
+  static std::size_t InitializePageSize() noexcept {
 #ifdef _WIN32
     SYSTEM_INFO sysInfo;
     GetSystemInfo(&sysInfo);
-    return static_cast<uint32_t>(sysInfo.dwPageSize);
+    return static_cast<std::size_t>(sysInfo.dwPageSize);
 #else
     long sz = ::sysconf(_SC_PAGE_SIZE);
     if (sz < 0) {
       // if error, fall back to default page size
-      constexpr uint32_t DEFAULT_PAGE_SIZE = 4096;
+      constexpr std::size_t DEFAULT_PAGE_SIZE = 4096;
       return DEFAULT_PAGE_SIZE;
     }
-    return static_cast<uint32_t>(sz);
+    return static_cast<std::size_t>(sz);
 #endif
   }
 };

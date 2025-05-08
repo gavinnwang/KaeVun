@@ -90,12 +90,12 @@ TEST(NodeTest, RandomByteInsertionsPreserveOrder) {
 
   // Generate random 2-byte keys
   std::mt19937 rng(42); // fixed seed for reproducibility
-  std::uniform_int_distribution<uint16_t> dist(0, 0xFFFF);
+  std::uniform_int_distribution<std::size_t> dist(0, 0xFFFF);
 
   std::set<std::vector<std::byte>> unique_keys;
 
   while (unique_keys.size() < num_keys) {
-    uint16_t key_val = dist(rng);
+    std::size_t key_val = dist(rng);
     std::vector<std::byte> key_bytes = {
         static_cast<std::byte>((key_val >> 8) & 0xFF),
         static_cast<std::byte>(key_val & 0xFF)};

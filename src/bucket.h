@@ -79,7 +79,7 @@ public:
   Buckets &operator=(const Buckets &other) = delete;
 
   // Size returns the number of buckets.
-  [[nodiscard]] uint16_t Size() const noexcept { return buckets_.size(); }
+  [[nodiscard]] std::size_t Size() const noexcept { return buckets_.size(); }
 
   [[nodiscard]] std::optional<std::reference_wrapper<const BucketMeta>>
   GetBucket(const std::string &name) const noexcept {
@@ -105,7 +105,7 @@ public:
 private:
   void Read(Page &p) noexcept {
     Deserializer d(&p);
-    for (uint32_t i = 0; i < p.Count(); i++) {
+    for (std::size_t i = 0; i < p.Count(); i++) {
       auto name = d.Read<std::string>();
       const auto root = d.Read<Pgid>();
       assert(buckets_.find(name) == buckets_.end() &&

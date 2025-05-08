@@ -204,9 +204,9 @@ private:
 private:
   struct Stats {
     // total number of started read tx
-    uint64_t tx_cnt_;
+    std::size_t tx_cnt_;
     // number of currently open read transactions
-    uint64_t open_tx_cnt_;
+    std::size_t open_tx_cnt_;
   };
   // mutex to protect the meta pages
   std::mutex metalock_;

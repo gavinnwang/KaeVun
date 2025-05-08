@@ -5,7 +5,6 @@
 #include "persist.h"
 #include "slice.h"
 #include <cstddef>
-#include <cstdint>
 #include <vector>
 
 namespace kv {
@@ -24,9 +23,9 @@ public:
   Node &operator=(Node &&) noexcept = default;
 
   void Read(Page &p) noexcept {
-    is_leaf_ = (p.Flags() & static_cast<uint32_t>(PageFlag::LeafPage));
+    is_leaf_ = (p.Flags() & static_cast<std::size_t>(PageFlag::LeafPage));
     elements_.resize(p.Count());
-    for (uint32_t i = 0; i < p.Count(); i++) {
+    for (std::size_t i = 0; i < p.Count(); i++) {
       if (is_leaf_) {
         LeafPage &leaf_p = p.AsPage<LeafPage>();
         elements_[i].key_ = leaf_p.GetKey(i);
@@ -50,17 +49,17 @@ public:
 
     Serializer serializer(&p);
     // skip all the header
-    uint32_t data_offset =
+    std::size_t data_offset =
         sizeof(p) +
         p.Count() * (is_leaf_ ? sizeof(LeafElement) : sizeof(BranchElement));
 
     serializer.Seek(data_offset);
-    for (uint32_t i = 0; i < p.Count(); i++) {
+    for (std::size_t i = 0; i < p.Count(); i++) {
       if (is_leaf_) {
         LeafPage &leaf_p = p.AsPage<LeafPage>();
         auto &e = leaf_p.GetElement(i);
 
-        uint32_t cur_offset = serializer.Offset();
+        std::size_t cur_offset = serializer.Offset();
         e.offset_ = cur_offset;
 
         e.ksize_ = elements_[i].key_.Size();
@@ -72,7 +71,7 @@ public:
         BranchPage &branch_p = p.AsPage<BranchPage>();
         auto &e = branch_p.GetElement(i);
 
-        uint32_t cur_offset = serializer.Offset();
+        std::size_t cur_offset = serializer.Offset();
         e.offset_ = cur_offset;
 
         e.ksize_ = elements_[i].key_.Size();
@@ -98,23 +97,23 @@ public:
   // Finds the index of the last element whose key is strictly less than the
   // given key.
   // Returns -1 if all the keys are greater than the input key.
-  [[nodiscard]] uint32_t FindLastLessThan(const Slice &key) const noexcept {
+  [[nodiscard]] std::size_t FindLastLessThan(const Slice &key) const noexcept {
     for (int i = elements_.size() - 1; i >= 0; --i) {
       if (elements_[i].key_ < key)
         return i;
     }
     return -1; // key < all existing keys
   }
-  [[nodiscard]] std::pair<uint32_t, bool>
+  [[nodiscard]] std::pair<std::size_t, bool>
   FindFirstGreaterOrEqualTo(const Slice &key) const noexcept {
-    for (uint32_t i = 0; i < elements_.size(); ++i) {
+    for (std::size_t i = 0; i < elements_.size(); ++i) {
       if (!(elements_[i].key_ < key)) { // i.e., elements_[i].key_ >= key
         bool exact = (elements_[i].key_ == key);
         return {i, exact};
       }
     }
     // If not found, return size() and false
-    return {static_cast<uint32_t>(elements_.size()), false};
+    return {static_cast<std::size_t>(elements_.size()), false};
   }
 
   [[nodiscard]] std::string ToString() const noexcept {
@@ -154,7 +153,7 @@ public:
     return *parent_;
   }
 
-  [[nodiscard]] uint32_t GetDepth() const noexcept { return depth_; }
+  [[nodiscard]] std::size_t GetDepth() const noexcept { return depth_; }
 
   [[nodiscard]] bool IsLeaf() const noexcept { return is_leaf_; }
 
@@ -166,10 +165,14 @@ public:
     return elements_;
   }
 
+  [[nodiscard]] std::size_t GetStorageSize() const noexcept {
+    std::size_t size = PAGE_HEADER_SIZE;
+  }
+
 private:
   std::vector<NodeElement> elements_;
   bool is_leaf_;
-  uint32_t depth_;
+  std::size_t depth_;
   // The node has empty pgid if it is newly created and hasn't claimed a page id
   // yet
   // todo

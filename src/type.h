@@ -3,7 +3,7 @@
 #include <cstdint>
 namespace kv {
 
-using Pgid = uint32_t;
-using Txid = uint32_t;
+using Pgid = std::size_t;
+using Txid = std::size_t;
 
 } // namespace kv
