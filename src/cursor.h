@@ -5,6 +5,7 @@
 #include "node.h"
 #include "page.h"
 #include "tx_cache.h"
+#include "type.h"
 #include <cstdint>
 #include <utility>
 #include <vector>
@@ -35,7 +36,9 @@ public:
     assert(!stack_.empty());
     auto &node = stack_.back();
     // if the top of the stack is a leaf then just return it
+    LOG_DEBUG("Get leaf node");
     if (node.n_) {
+      LOG_DEBUG("node exists");
       assert(node.n_->IsLeaf());
       return *node.n_;
     }
@@ -44,8 +47,10 @@ public:
     // construct the node from top down we will cache all the nodes along the
     // way
     auto cur = stack_[0].n_;
+    LOG_DEBUG("node doesn't exists, reconstruct from id {}",
+              stack_[0].p_->Id());
     if (cur == nullptr) {
-      cur = &tx_cache_.GetNode(stack_[0].p_->Id(), nullptr);
+      cur = &tx_cache_.GetOrCreateNode(stack_[0].p_->Id(), nullptr);
     }
     for (int i = 0; i < (int)stack_.size() - 1; i++) {
       assert(!stack_[i].IsLeaf());
@@ -80,16 +85,17 @@ private:
     if (node.IsLeaf()) {
       LOG_INFO("is leaf pid: {}", node.p_->Id());
       if (node.n_) {
-        LOG_INFO("node : {}", node.n_->ToString());
-        index_ = node.n_->FindLastLessThan(key) + 1;
-        LOG_INFO("node : {}, index: {}, search key: {}", node.n_->ToString(),
-                 index_, key.ToString());
+        // LOG_INFO("node : {}", node.n_->ToString());
+        auto [index, _] = node.n_->FindFirstGreaterOrEqualTo(key);
+        index_ = index;
+        // LOG_INFO("node : {}, index: {}, search key: {}", node.n_->ToString(),
+        //          index_, key.ToString());
         node.index_ = index_;
       } else {
         auto &p = node.p_->AsPage<LeafPage>();
-        LOG_INFO("hi: {}", node.p_->Id());
+        // LOG_INFO("hi: {}", node.p_->Id());
         index_ = p.FindLastLessThan(key) + 1;
-        LOG_INFO("index: {}", index_);
+        // LOG_INFO("index: {}", index_);
         node.index_ = index_;
       }
     } else {

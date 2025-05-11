@@ -37,14 +37,22 @@ concept IsValidPage =
     std::same_as<T, class LeafPage> || std::same_as<T, class BranchPage>;
 
 class Page {
+protected:
+  Pgid pgid_;
+  std::size_t flags_;
+  std::size_t overflow_;
+  std::size_t count_;
+  std::size_t magic_;
+
 public:
   Page() = default;
-
   Page(const Page &other) = delete;
   Page &operator=(const Page &other) = delete;
   Page(Page &&other) = delete;
   Page &operator=(Page &&other) noexcept = delete;
   ~Page() = default;
+  void AssertMagic() const noexcept { assert(magic_ == MAGIC); }
+  void SetMagic() noexcept { magic_ = MAGIC; }
 
   void SetId(Pgid id) noexcept { pgid_ = id; }
   void SetFlags(PageFlag flags) noexcept {
@@ -63,24 +71,21 @@ public:
   }
 
   [[nodiscard]] void *Data() noexcept {
+    AssertMagic();
     return reinterpret_cast<void *>(reinterpret_cast<std::byte *>(this) +
                                     sizeof(Page));
   }
 
   [[nodiscard]] const void *Data() const noexcept {
+    AssertMagic();
     return reinterpret_cast<const void *>(
         reinterpret_cast<const std::byte *>(this) + sizeof(Page));
   }
 
   template <IsValidPage T> [[nodiscard]] T &AsPage() noexcept {
+    AssertMagic();
     return *reinterpret_cast<T *>(this);
   }
-
-protected:
-  Pgid pgid_;
-  std::size_t flags_;
-  std::size_t overflow_;
-  std::size_t count_;
 };
 constexpr std::size_t PAGE_HEADER_SIZE = sizeof(Page);
 
@@ -96,6 +101,9 @@ struct BranchElement {
   std::size_t ksize_;
   Pgid pgid_;
 };
+
+constexpr std::size_t BRANCH_ELEMENT_SIZE = sizeof(BranchElement);
+constexpr std::size_t LEAF_ELEMENT_SIZE = sizeof(LeafElement);
 
 template <typename T>
 concept IsValidPageElement =
@@ -172,31 +180,16 @@ class PageBuffer final {
 public:
   PageBuffer(std::size_t size, std::size_t page_size) noexcept
       : size_(size), page_size_(page_size), total_bytes_(size * page_size),
-        buffer_(std::make_unique<std::byte[]>(total_bytes_)) {}
+        buffer_(std::make_unique<std::byte[]>(total_bytes_)) {
+    for (std::size_t i = 0; i < size; i++) {
+      GetPage(i).SetMagic();
+    }
+  }
 
   // Move constructor
-  PageBuffer(PageBuffer &&other) noexcept
-      : size_(other.size_), page_size_(other.page_size_),
-        total_bytes_(other.total_bytes_), buffer_(std::move(other.buffer_)) {
-    other.size_ = 0;
-    other.page_size_ = 0;
-    other.total_bytes_ = 0;
-  }
-
+  PageBuffer(PageBuffer &&other) noexcept = default;
   // Move assignment
-  PageBuffer &operator=(PageBuffer &&other) noexcept {
-    if (this != &other) {
-      size_ = other.size_;
-      page_size_ = other.page_size_;
-      total_bytes_ = other.total_bytes_;
-      buffer_ = std::move(other.buffer_);
-
-      other.size_ = 0;
-      other.page_size_ = 0;
-      other.total_bytes_ = 0;
-    }
-    return *this;
-  }
+  PageBuffer &operator=(PageBuffer &&other) noexcept = default;
 
   // Delete copy
   PageBuffer(const PageBuffer &) = delete;
@@ -227,6 +220,17 @@ private:
 ;
 
 class Meta {
+
+private:
+  std::size_t magic_;
+  std::size_t version_;
+  std::size_t page_size_;
+  Pgid freelist_;
+  Pgid buckets_;
+  Pgid watermark_;
+  Txid txid_;
+  std::size_t checksum_;
+
 public:
   [[nodiscard]] Pgid GetWatermark() const noexcept { return watermark_; }
   [[nodiscard]] Pgid GetBuckets() const noexcept { return buckets_; }
@@ -239,6 +243,14 @@ public:
   void SetWatermark(Pgid id) noexcept { watermark_ = id; }
   void SetTxid(Txid id) noexcept { txid_ = id; }
   void IncrementTxid() noexcept { txid_++; }
+
+  [[nodiscard]] std::string ToString() const noexcept {
+    return fmt::format("Meta(magic: {:#x}, version: {}, page_size: {}, "
+                       "freelist: {}, buckets: {}, "
+                       "watermark: {}, txid: {}, checksum: {:#x})",
+                       magic_, version_, page_size_, freelist_, buckets_,
+                       watermark_, txid_, checksum_);
+  }
 
   [[nodiscard]] std::size_t Sum64() const noexcept {
     constexpr std::size_t FNV_OFFSET_BASIS_64 = 14695981039346656037ULL;
@@ -258,7 +270,8 @@ public:
   void Write(Page &p) noexcept {
     // Page id is either going to be 0 or 1 which we can determine by the
     // transaction
-    p.SetId(txid_ % 2);
+    p.SetId(META_PAGE_ID);
+    LOG_INFO("tx meta page written to {}", p.Id());
     p.SetFlags(PageFlag::MetaPage);
 
     // Compute and store the checksum before copying data to page
@@ -278,15 +291,5 @@ public:
     }
     return Error{"Meta validation failed"};
   }
-
-private:
-  std::size_t magic_;
-  std::size_t version_;
-  std::size_t page_size_;
-  Pgid freelist_;
-  Pgid buckets_;
-  Pgid watermark_;
-  Txid txid_;
-  std::size_t checksum_;
 };
 } // namespace kv

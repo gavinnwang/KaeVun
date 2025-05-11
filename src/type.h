@@ -1,9 +1,9 @@
 #pragma once
 
-#include <cstdint>
+#include <cstddef>
 namespace kv {
 
-using Pgid = std::size_t;
-using Txid = std::size_t;
+using Pgid = size_t;
+using Txid = size_t;
 
 } // namespace kv

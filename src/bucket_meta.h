@@ -5,7 +5,7 @@ namespace kv {
 
 class BucketMeta {
 public:
-  BucketMeta(Pgid root) : root_(root) {}
+  explicit BucketMeta(Pgid root) : root_(root) {}
 
   [[nodiscard]] Pgid Root() const noexcept { return root_; }
 

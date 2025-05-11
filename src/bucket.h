@@ -5,7 +5,6 @@
 #include "persist.h"
 #include "type.h"
 #include <cassert>
-#include <cstdint>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -101,20 +100,17 @@ public:
     auto [it, _] = buckets_.emplace(std::move(name), std::move(meta));
     return std::cref(it->second);
   }
-
-private:
-  void Read(Page &p) noexcept {
-    Deserializer d(&p);
-    for (std::size_t i = 0; i < p.Count(); i++) {
-      auto name = d.Read<std::string>();
-      const auto root = d.Read<Pgid>();
-      assert(buckets_.find(name) == buckets_.end() &&
-             "bucket names should not be duplicate");
-      buckets_.emplace(std::move(name), BucketMeta{root});
+  [[nodiscard]] std::size_t GetStorageSize() const noexcept {
+    auto sz = PAGE_HEADER_SIZE;
+    sz += sizeof(BucketMeta) * buckets_.size();
+    for (const auto &[name, _] : buckets_) {
+      sz += name.size();
     }
+    return sz;
   }
 
   void Write(Page &p) const noexcept {
+    p.SetMagic();
     p.SetFlags(PageFlag::BucketPage);
     p.SetCount(buckets_.size());
     Serializer s{p.Data()};
@@ -122,6 +118,26 @@ private:
       s.Write(name);
       s.Write(b.Root());
     }
+  }
+
+private:
+  void Read(Page &p) noexcept {
+    LOG_DEBUG("Starting to read bucket metadata from page with id {}", p.Id());
+
+    Deserializer d(p);
+    for (std::size_t i = 0; i < p.Count(); i++) {
+      auto name = d.Read<std::string>();
+      const auto root = d.Read<Pgid>();
+
+      LOG_DEBUG("Deserialized bucket {} with root page id {}", name, root);
+      assert(name.size() > 0 && root > 2);
+
+      assert(buckets_.find(name) == buckets_.end() &&
+             "bucket names should not be duplicate");
+      buckets_.emplace(std::move(name), BucketMeta{root});
+    }
+
+    LOG_DEBUG("Finished reading {} bucket(s) from page {}", p.Count(), p.Id());
   }
 
   std::unordered_map<std::string, BucketMeta> buckets_{};

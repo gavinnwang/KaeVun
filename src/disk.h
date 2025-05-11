@@ -7,7 +7,6 @@
 #include "os.h"
 #include "page.h"
 #include "shadow_page.h"
-#include <cstdint>
 #include <expected>
 #include <fstream>
 #include <mutex>
@@ -78,7 +77,9 @@ public:
     LOG_INFO("Accessing mmap memory address: {}, page id: {}", GetAddress(pos),
              id);
 
-    return *reinterpret_cast<Page *>(GetAddress(pos));
+    auto &p = *reinterpret_cast<Page *>(GetAddress(pos));
+    p.AssertMagic();
+    return p;
   }
 
   [[nodiscard]] void *GetAddress(std::size_t pos) const noexcept {
@@ -134,9 +135,10 @@ public:
                     buf.GetBuffer().size(), start_pgid * page_size_);
   }
 
-  [[nodiscard]] std::optional<Error> WritePage(Page &p) noexcept {
+  [[nodiscard]] std::optional<Error> WritePage(const Page &p) noexcept {
     const auto size = (p.Overflow() + 1) * PageSize();
-    return WriteRaw(reinterpret_cast<char *>(&p), size, p.Id() * PageSize());
+    return WriteRaw(reinterpret_cast<const char *>(&p), size,
+                    p.Id() * PageSize());
   }
 
   [[nodiscard]] std::optional<Error> Sync() const noexcept {
@@ -159,7 +161,7 @@ public:
 
     auto cur_wm = rwtx_meta.GetWatermark();
     p.SetId(cur_wm);
-    assert(p.Id() > 3);
+    assert(p.Id() > 2);
     auto min_sz = (p.Id() + count) * page_size_;
     if (min_sz > mmap_handle_.Size()) {
       auto err = mmap_handle_.Mmap(path_, fd_.GetFd(), min_sz);

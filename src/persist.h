@@ -1,7 +1,7 @@
 #pragma once
 
+#include "page.h"
 #include <cstddef>
-#include <cstdint>
 #include <cstring>
 #include <string>
 
@@ -43,6 +43,8 @@ class Deserializer {
 public:
   explicit Deserializer(const void *ptr)
       : ptr_(reinterpret_cast<const std::byte *>(ptr)), offset_(0) {}
+
+  explicit Deserializer(const Page &p) : Deserializer(p.Data()) {}
 
   template <typename T> T Read() noexcept {
     const T *val = reinterpret_cast<const T *>(ptr_ + offset_);

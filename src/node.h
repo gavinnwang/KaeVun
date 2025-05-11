@@ -12,6 +12,23 @@ namespace kv {
 // in memory version of a page
 class Node {
 
+private:
+  struct NodeElement {
+    Pgid pgid_;
+    Slice key_;
+    Slice val_;
+  };
+  std::vector<NodeElement> elements_;
+  bool is_leaf_;
+  std::size_t depth_{0};
+  // The node has empty pgid if it is newly created and hasn't claimed a page id
+  // yet todo
+  std::optional<Pgid> pgid_;
+  // the parent node
+  Node *parent_ = nullptr;
+  // the key that the parent node uses to direct to us
+  Slice parent_key_;
+
 public:
   explicit Node(Node *parent = nullptr) noexcept : parent_(parent) {}
   // prevent copying
@@ -21,6 +38,29 @@ public:
   // allow moving
   Node(Node &&) noexcept = default;
   Node &operator=(Node &&) noexcept = default;
+
+  [[nodiscard]] std::string ToString() const noexcept {
+    std::vector<std::string> element_strs;
+
+    for (const auto &node : elements_) {
+      if (is_leaf_) {
+        element_strs.push_back(fmt::format(
+            "(key: {}, val: {})", node.key_.ToString(), node.val_.ToString()));
+      } else {
+        element_strs.push_back(fmt::format("(key: {}, pgid: {})",
+                                           node.key_.ToString(), node.pgid_));
+      }
+    }
+
+    std::string node_type = is_leaf_ ? "Leaf" : "Branch";
+    std::string parent_key_str = parent_ ? parent_key_.ToString() : "None";
+    std::string pgid_str = pgid_.has_value() ? std::to_string(*pgid_) : "None";
+
+    return fmt::format(
+        "Node(Type: {}, Depth: {}, PageID: {}, ParentKey: {}, Elements: [{}])",
+        node_type, depth_, pgid_str, parent_key_str,
+        fmt::join(element_strs, ", "));
+  }
 
   void Read(Page &p) noexcept {
     is_leaf_ = (p.Flags() & static_cast<std::size_t>(PageFlag::LeafPage));
@@ -36,7 +76,10 @@ public:
         elements_[i].pgid_ = branch_p.GetPgid(i);
       }
     }
-    // save first key for spliting
+    if (!elements_.empty()) {
+      // save first key for spilling
+      parent_key_ = elements_.front().key_;
+    }
   }
 
   void Write(Page &p) const noexcept {
@@ -49,12 +92,10 @@ public:
 
     Serializer serializer(&p);
     // skip all the header
-    std::size_t data_offset =
-        sizeof(p) +
-        p.Count() * (is_leaf_ ? sizeof(LeafElement) : sizeof(BranchElement));
+    std::size_t data_offset = GetHeaderSize();
 
     serializer.Seek(data_offset);
-    for (std::size_t i = 0; i < p.Count(); i++) {
+    for (std::size_t i = 0; i < elements_.size(); i++) {
       if (is_leaf_) {
         LeafPage &leaf_p = p.AsPage<LeafPage>();
         auto &e = leaf_p.GetElement(i);
@@ -78,32 +119,46 @@ public:
         e.pgid_ = elements_[i].pgid_;
 
         serializer.WriteBytes(elements_[i].key_.Data(), e.ksize_);
+        assert(elements_[i].val_.Size() == 0);
       }
     }
+    assert(serializer.Offset() == GetStorageSize());
   }
 
-  // todo change this to own the memory
-  void Put(const Slice &key, const Slice &val) noexcept {
-    auto index = FindLastLessThan(key) + 1;
-    elements_.insert(elements_.begin() + index, {0, key, val});
-  }
-
-  // todo change this to own the memory
-  void Put(const Slice &key, Pgid pgid) noexcept {
-    auto index = FindLastLessThan(key) + 1;
-    elements_.insert(elements_.begin() + index, {pgid, key, {}});
-  }
-
-  // Finds the index of the last element whose key is strictly less than the
-  // given key.
-  // Returns -1 if all the keys are greater than the input key.
-  [[nodiscard]] std::size_t FindLastLessThan(const Slice &key) const noexcept {
-    for (int i = elements_.size() - 1; i >= 0; --i) {
-      if (elements_[i].key_ < key)
-        return i;
+  [[nodiscard]] std::size_t GetStorageSize() const noexcept {
+    auto sz = GetHeaderSize();
+    for (const auto &e : elements_) {
+      sz += e.key_.Size() + e.val_.Size();
     }
-    return -1; // key < all existing keys
+    return sz;
   }
+
+  [[nodiscard]] std::size_t GetElementSize() const noexcept {
+    return (is_leaf_ ? sizeof(LeafElement) : sizeof(BranchElement));
+  }
+
+  [[nodiscard]] std::size_t GetHeaderSize() const noexcept {
+    std::size_t header_size =
+        PAGE_HEADER_SIZE + elements_.size() * GetElementSize();
+    return header_size;
+  }
+
+  // todo change this to own the memory
+  void Put(const Slice &key, const Slice &val) noexcept { Put(key, key, val); }
+
+  // todo change this to own the memory
+  void Put(const Slice &key, Pgid pgid) noexcept { Put(key, key, {}, pgid); }
+
+  void Put(const Slice &old_key, const Slice &new_key, const Slice &val,
+           Pgid pgid = 0) noexcept {
+    auto [index, exact] = FindFirstGreaterOrEqualTo(old_key);
+    if (!exact) {
+      elements_.insert(elements_.begin() + index, {pgid, new_key, val});
+    } else {
+      elements_[index] = {pgid, new_key, val};
+    }
+  }
+
   [[nodiscard]] std::pair<std::size_t, bool>
   FindFirstGreaterOrEqualTo(const Slice &key) const noexcept {
     for (std::size_t i = 0; i < elements_.size(); ++i) {
@@ -116,29 +171,6 @@ public:
     return {static_cast<std::size_t>(elements_.size()), false};
   }
 
-  [[nodiscard]] std::string ToString() const noexcept {
-    std::vector<std::string> elements;
-
-    for (const auto &node : elements_) {
-      if (is_leaf_) {
-        elements.push_back(fmt::format("( key: {}, val: {} )",
-                                       node.key_.ToString(),
-                                       node.val_.ToString()));
-      } else {
-        elements.push_back(fmt::format("( key: {}, pgid: {} )",
-                                       node.key_.ToString(), node.pgid_));
-      }
-    }
-
-    return fmt::format("[{}]", fmt::join(elements, ", "));
-  }
-
-  struct NodeElement {
-    Pgid pgid_;
-    Slice key_;
-    Slice val_;
-  };
-
   [[nodiscard]] Node &Root() noexcept {
     return parent_ ? parent_->Root() : *this;
   }
@@ -147,15 +179,28 @@ public:
 
   void SetDepth(int depth) noexcept { depth_ = depth; }
 
-  [[nodiscard]] Node &GetParent() const noexcept {
+  [[nodiscard]] std::optional<std::reference_wrapper<Node>>
+  GetParent() const noexcept {
     // parent_ can only be nullptr when it is the root
-    assert(depth_ == 0 || parent_ != nullptr);
-    return *parent_;
+    // assert(depth_ == 0 || parent_ != nullptr);
+    if (parent_) {
+      return std::ref(*parent_);
+    } else {
+      return std::nullopt;
+    }
+  }
+
+  [[nodiscard]] Node *GetParentPtr() const noexcept {
+    // parent_ can only be nullptr when it is the root
+    // assert(depth_ == 0 || parent_ != nullptr);
+    return parent_;
   }
 
   [[nodiscard]] std::size_t GetDepth() const noexcept { return depth_; }
 
   [[nodiscard]] bool IsLeaf() const noexcept { return is_leaf_; }
+
+  [[nodiscard]] Slice GetParentKey() const noexcept { return parent_key_; }
 
   [[nodiscard]] std::optional<Pgid> GetPgid() const noexcept { return pgid_; }
 
@@ -164,19 +209,5 @@ public:
   [[nodiscard]] std::vector<NodeElement> GetElements() const noexcept {
     return elements_;
   }
-
-  [[nodiscard]] std::size_t GetStorageSize() const noexcept {
-    std::size_t size = PAGE_HEADER_SIZE;
-  }
-
-private:
-  std::vector<NodeElement> elements_;
-  bool is_leaf_;
-  std::size_t depth_;
-  // The node has empty pgid if it is newly created and hasn't claimed a page id
-  // yet
-  // todo
-  std::optional<Pgid> pgid_;
-  Node *parent_ = nullptr;
 };
 } // namespace kv

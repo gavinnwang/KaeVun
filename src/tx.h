@@ -33,7 +33,30 @@ public:
 
   [[nodiscard]] std::optional<Error> Commit() noexcept {
     LOG_INFO("Transaction committing");
-    auto e = tx_handler_.Write();
+    auto e = tx_handler_.Spill(meta_);
+    if (e) {
+      return e;
+    }
+    auto p_e = tx_handler_.AllocateShadowPage(
+        meta_, (buckets_.GetStorageSize() / disk_.PageSize()) + 1);
+    if (!p_e) {
+      return p_e.error();
+    }
+    auto &p = p_e.value().get();
+    LOG_DEBUG("Writing buckets to newly allocated p {}", p.Id());
+    buckets_.Write(p);
+    meta_.SetBuckets(p.Id());
+
+    // Writing all dirty pages to disk.
+    e = tx_handler_.Write();
+    if (e) {
+      return e;
+    }
+    e = WriteMeta();
+    if (e) {
+      return e;
+    }
+
     return std::nullopt;
   }
 
@@ -62,6 +85,7 @@ public:
       return std::unexpected{Error{"Bucket name required"}};
     }
 
+    LOG_DEBUG("Creating a leaf page for bucket");
     auto p_err = tx_handler_.AllocateShadowPage(meta_, 1);
     if (!p_err) {
       return std::unexpected{p_err.error()};

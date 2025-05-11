@@ -7,7 +7,6 @@
 #include "scope.h"
 #include "tx.h"
 #include <cassert>
-#include <cstdint>
 #include <expected>
 #include <filesystem>
 #include <functional>
@@ -44,7 +43,7 @@ public:
 
     if (file_sz == 0) {
       // if file size is 0, init, set up meta
-      auto err_opt = db->Init();
+      auto err_opt = db->InitNewDatabaseFile();
       if (err_opt.has_value()) {
         LOG_ERROR("Init failed {}", err_opt->message());
         db->Close();
@@ -62,7 +61,7 @@ public:
     }
 
     // set up meta* reference
-    db->meta_ = db->disk_handler_.GetPageFromMmap(0).GetDataAs<Meta>();
+    db->Init();
     assert(db->meta_);
     // auto err_opt = db->meta_->Validate();
     // if (err_opt.has_value()) {
@@ -105,6 +104,7 @@ public:
     if (!opened_)
       return std::unexpected{Error{"DB not opened"}};
     // Tx takes in a copy of the db meta
+    LOG_DEBUG("---Creating transaction---");
     Tx tx{disk_handler_, true, *meta_};
     txs.push_back(&tx);
     rwtx_ = &tx;
@@ -156,8 +156,15 @@ public:
   }
 
 private:
+  // Initialize the internal fields of the db
   std::optional<Error> Init() noexcept {
-    PageBuffer buf{4, disk_handler_.PageSize()};
+    LOG_DEBUG("Initializing database");
+    meta_ = disk_handler_.GetPageFromMmap(0).GetDataAs<Meta>();
+    LOG_DEBUG("{}", meta_->ToString());
+    return {};
+  }
+  std::optional<Error> InitNewDatabaseFile() noexcept {
+    PageBuffer buf{3, disk_handler_.PageSize()};
 
     auto &meta_p = buf.GetPage(META_PAGE_ID);
     meta_p.SetId(META_PAGE_ID);
@@ -168,7 +175,8 @@ private:
     m.SetVersion(VERSION_NUMBER);
     m.SetPageSize(disk_handler_.PageSize());
     m.SetFreelist(FREELIST_PAGE_ID);
-    m.SetWatermark(4); // water mark?
+    m.SetBuckets(BUCKET_PAGE_ID);
+    m.SetWatermark(3); // highest page id in use
     m.SetTxid(0);
     m.SetChecksum(m.Sum64());
 
@@ -180,9 +188,9 @@ private:
     bucket_p.SetId(BUCKET_PAGE_ID);
     bucket_p.SetFlags(PageFlag::BucketPage);
 
-    auto &leaf_p = buf.GetPage(3);
-    leaf_p.SetId(3);
-    leaf_p.SetFlags(PageFlag::LeafPage);
+    // auto &leaf_p = buf.GetPage(3);
+    // leaf_p.SetId(3);
+    // leaf_p.SetFlags(PageFlag::LeafPage);
 
     auto e = disk_handler_.WritePageBuffer(buf, 0);
     if (e.has_value()) {
@@ -192,6 +200,7 @@ private:
   }
 
   [[nodiscard]] std::optional<Error> Validate() noexcept {
+    // Validate the meta
     auto buf_or_err = disk_handler_.CreatePageBufferFromDisk(0, 1);
     if (!buf_or_err) {
       return buf_or_err.error();
