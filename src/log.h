@@ -18,7 +18,7 @@ enum class LogLevel {
 };
 
 // Define the current log level
-constexpr auto CURRENT_LOG_LEVEL = LogLevel::ALL;
+constexpr auto CURRENT_LOG_LEVEL = LogLevel::OFF;
 
 // Time format and output stream
 constexpr auto LOG_LOG_TIME_FORMAT = "%M:%S";

@@ -74,8 +74,8 @@ public:
 
     assert(mmap_handle_.Valid() && pos + sizeof(Page) <= mmap_handle_.Size());
 
-    LOG_INFO("Accessing mmap memory address: {}, page id: {}", GetAddress(pos),
-             id);
+    // LOG_INFO("Accessing mmap memory address: {}, page id: {}",
+    // GetAddress(pos), id);
 
     auto &p = *reinterpret_cast<Page *>(GetAddress(pos));
     assert(p.Id() == id);

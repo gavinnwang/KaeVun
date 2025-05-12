@@ -205,6 +205,18 @@ public:
     // point
     return {static_cast<int>(Count()), false};
   }
+  [[nodiscard]] std::string ToString() const noexcept {
+    std::string result = "BranchPage[";
+    for (std::size_t i = 0; i < Count(); ++i) {
+      result += fmt::format("{{key: '{}', pgid: {}}}", GetKey(i).ToString(),
+                            elements_[i].pgid_);
+      if (i != Count() - 1) {
+        result += ", ";
+      }
+    }
+    result += "]";
+    return result;
+  }
 };
 
 class PageBuffer final {

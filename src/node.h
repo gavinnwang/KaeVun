@@ -173,20 +173,32 @@ public:
     return {static_cast<std::size_t>(elements_.size()), false};
   }
 
-  [[nodiscard]] Node &Root() noexcept {
-    LOG_DEBUG("getting root");
+  [[nodiscard]] Node &Root(std::size_t depth = 0) noexcept {
+    LOG_DEBUG("getting root at depth {}", depth);
+
+    // if (depth > 5) {
+    //   LOG_ERROR("Exceeded maximum stack depth while traversing to root");
+    //   std::abort();
+    // }
+
     if (parent_) {
       LOG_DEBUG("parent {}", parent_->ToString());
+      return parent_->Root(depth + 1);
     }
-    return parent_ ? parent_->Root() : *this;
+
+    return *this;
   }
 
-  void SetParent(Node *parent) noexcept { parent_ = parent; }
+  void SetParent(Node *parent) noexcept {
+    assert(parent != this);
+    parent_ = parent;
+  }
 
   void SetDepth(int depth) noexcept { depth_ = depth; }
 
   [[nodiscard]] std::optional<std::reference_wrapper<Node>>
   GetParent() const noexcept {
+    assert(parent_ != this);
     // parent_ can only be nullptr when it is the root
     // assert(depth_ == 0 || parent_ != nullptr);
     if (parent_) {

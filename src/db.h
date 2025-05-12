@@ -155,6 +155,30 @@ public:
     return tx.Commit();
   }
 
+  /// Debug utility to print all pages of a bucket by page id traversal.
+  ///
+  /// This starts from the bucket’s root page id and traverses recursively,
+  /// printing each page (branch or leaf) using its `ToString` or
+  /// `ToStringVerbose` method.
+  void DebugPrintBucketPages(const std::string &bucket_name) noexcept {
+    auto tx_or_err = Begin(false);
+    if (!tx_or_err) {
+      LOG_ERROR("Failed to start read transaction");
+      return;
+    }
+
+    auto &tx = tx_or_err.value();
+    auto bucket_opt = tx.GetBucket(bucket_name);
+    if (!bucket_opt.has_value()) {
+      LOG_ERROR("Bucket '{}' not found", bucket_name);
+      return;
+    }
+
+    auto &bucket = bucket_opt.value();
+    Pgid root_pgid = bucket.GetMetaTest().Root();
+    TraverseAndPrintPage(root_pgid, 0);
+  }
+
 private:
   // Initialize the internal fields of the db
   std::optional<Error> Init() noexcept {
@@ -208,6 +232,30 @@ private:
     auto &p = buf_or_err->GetPage(0);
 
     return p.GetDataAs<Meta>()->Validate();
+  }
+
+  /// Recursively print all pages starting from the given page id.
+  void TraverseAndPrintPage(Pgid pgid, int depth) noexcept {
+    if (pgid == 0) {
+      LOG_INFO("Reached null page id");
+      return;
+    }
+
+    auto &page = disk_handler_.GetPageFromMmap(pgid);
+
+    std::string indent(depth * 2, ' ');
+    if (page.Flags() & static_cast<std::size_t>(PageFlag::LeafPage)) {
+      LeafPage &leaf = page.AsPage<LeafPage>();
+      LOG_INFO("{}LeafPage {}: {}", indent, pgid, leaf.ToString());
+    } else if (page.Flags() & static_cast<std::size_t>(PageFlag::BranchPage)) {
+      BranchPage &branch = page.AsPage<BranchPage>();
+      LOG_INFO("{}BranchPage {}: {}", indent, pgid, branch.ToString());
+      for (std::size_t i = 0; i < branch.Count(); ++i) {
+        TraverseAndPrintPage(branch.GetPgid(i), depth + 1);
+      }
+    } else {
+      LOG_INFO("{}Unknown page type for pgid {}", indent, pgid);
+    }
   }
 
 private:

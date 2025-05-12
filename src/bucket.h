@@ -14,6 +14,12 @@ namespace kv {
 
 // Bucket associated with a tx
 class Bucket {
+private:
+  // only used for write tx
+  ShadowPageHandler &sp_handler_;
+  const std::string &name_;
+  const BucketMeta &meta_;
+
 public:
   Bucket(ShadowPageHandler &sp_handler, const std::string &name,
          const BucketMeta &meta) noexcept
@@ -25,6 +31,7 @@ public:
   Bucket &operator=(Bucket &&) = delete;
   ~Bucket() = default;
 
+  [[nodiscard]] const BucketMeta &GetMetaTest() const noexcept { return meta_; }
   [[nodiscard]] const std::string &Name() const noexcept { return name_; }
   // [[nodiscard]] bool Writable() const noexcept { return meta_.;};
   [[nodiscard]] Cursor CreateCursor() const noexcept {
@@ -60,12 +67,6 @@ public:
     LOG_INFO("done putting {} {}", key.ToString(), n.ToString());
     return {};
   }
-
-private:
-  // only used for write tx
-  ShadowPageHandler &sp_handler_;
-  const std::string &name_;
-  const BucketMeta &meta_;
 };
 
 // In memory representation of the buckets meta page
