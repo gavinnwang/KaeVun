@@ -122,8 +122,8 @@ public:
 
     // Check if split is even needed
     if (n.GetElements().size() <= MIN_KEY_PER_PAGE * 2 ||
-        n.GetStorageSize() < 200) {
-      // n.GetStorageSize() < disk_.PageSize()) {
+        // n.GetStorageSize() < 200) {
+        n.GetStorageSize() < disk_.PageSize()) {
       LOG_DEBUG("No split needed. Node has only {} elements and size {} bytes.",
                 n.GetElements().size(), n.GetStorageSize());
       return {};
@@ -133,7 +133,8 @@ public:
               n.GetElements().size(), n.GetStorageSize());
 
     std::vector<Node> nodes;
-    std::size_t threshold = 100;
+    // std::size_t threshold = 100;
+    std::size_t threshold = disk_.PageSize() / 2;
     std::size_t cur_size = PAGE_HEADER_SIZE;
     Node cur_node{nullptr, n.IsLeaf()};
 

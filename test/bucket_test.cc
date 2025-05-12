@@ -50,13 +50,13 @@ TEST(BucketTest, BucketCreateAndReadTest) {
 
   auto db = GetTmpDB();
 
-  auto insert_keys = [](kv::Bucket &bucket) {
-    for (const auto &[key, val] :
-         std::vector<std::pair<std::string, std::string>>{{"key1", "val1"},
-                                                          {"key2", "val2"},
-                                                          {"key3", "val3"},
-                                                          {"key4", "val4"},
-                                                          {"key0", "val0"}}) {
+  auto keys_and_vals = std::vector<std::pair<std::string, std::string>>{
+      {"key1", "val1"}, {"key2", "val2"}, {"key3", "val3"},
+      {"key4", "val4"}, {"key0", "val0"},
+  };
+
+  auto insert_keys = [&](kv::Bucket &bucket) {
+    for (const auto &[key, val] : keys_and_vals) {
       assert(!bucket.Put(key, val));
     }
   };
@@ -68,8 +68,6 @@ TEST(BucketTest, BucketCreateAndReadTest) {
       LOG_DEBUG("CreateBucket failed: {}", bucket_result.error().message());
       std::abort();
     }
-    LOG_DEBUG("CreateBucket success with root {}",
-              bucket_result.value().Root());
 
     auto bucket_opt = tx.GetBucket("bucket");
     if (!bucket_opt.has_value()) {
@@ -80,15 +78,17 @@ TEST(BucketTest, BucketCreateAndReadTest) {
     auto &bucket = bucket_opt.value();
     insert_keys(bucket);
 
-    auto get_result = bucket.Get("key1");
-    assert(get_result.has_value());
-    LOG_INFO("Retrieved key1 with value: {}", get_result.value().ToString());
+    for (const auto &[key, val] : keys_and_vals) {
+      auto get_result = bucket.Get(key);
+      assert(get_result.has_value() && get_result.value() == val);
+      LOG_INFO("Inserted and verified key '{}' with value '{}'", key, val);
+    }
 
     return {};
   });
   assert(!err);
 
-  // Reopen the bucket and validate data persists.
+  // Reopen the bucket and validate data persists for all keys.
   err = db->Update([&](kv::Tx &tx) -> std::optional<kv::Error> {
     auto bucket_opt = tx.GetBucket("bucket");
     if (!bucket_opt.has_value()) {
@@ -97,9 +97,11 @@ TEST(BucketTest, BucketCreateAndReadTest) {
     }
 
     auto &bucket = bucket_opt.value();
-    auto get_result = bucket.Get("key1");
-    assert(get_result.has_value() && get_result.value() == "val1");
-    LOG_DEBUG("got {}", get_result.value().ToString());
+    for (const auto &[key, val] : keys_and_vals) {
+      auto get_result = bucket.Get(key);
+      assert(get_result.has_value() && get_result.value() == val);
+      LOG_INFO("Persisted key '{}' has value '{}'", key, val);
+    }
 
     return {};
   });
