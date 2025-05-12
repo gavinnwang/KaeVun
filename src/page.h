@@ -279,6 +279,7 @@ private:
 public:
   [[nodiscard]] Pgid GetWatermark() const noexcept { return watermark_; }
   [[nodiscard]] Pgid GetBuckets() const noexcept { return buckets_; }
+  [[nodiscard]] Pgid GetTxid() const noexcept { return txid_; }
   void SetMagic(std::size_t magic) noexcept { magic_ = magic; }
   void SetVersion(std::size_t ver) noexcept { version_ = ver; }
   void SetPageSize(std::size_t size) noexcept { page_size_ = size; }
@@ -315,7 +316,7 @@ public:
   void Write(Page &p) noexcept {
     // Page id is either going to be 0 or 1 which we can determine by the
     // transaction
-    p.SetId(EVEN_META_PAGE_ID);
+    p.SetId(txid_ % 2);
     LOG_INFO("tx meta page written to {}", p.Id());
     p.SetFlags(PageFlag::MetaPage);
 

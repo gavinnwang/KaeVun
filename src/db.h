@@ -104,7 +104,7 @@ public:
       return std::unexpected{Error{"DB not opened"}};
     // Tx takes in a copy of the db meta
     LOG_DEBUG("---Creating transaction---");
-    Tx tx{disk_handler_, true, *even_meta_};
+    Tx tx{disk_handler_, true, GetCurrentMeta()};
     txs.push_back(&tx);
     rwtx_ = &tx;
 
@@ -116,7 +116,7 @@ public:
     std::lock_guard metalock(metalock_);
     if (!opened_)
       return std::unexpected{Error{"DB not opened"}};
-    Tx tx{disk_handler_, false, *even_meta_};
+    Tx tx{disk_handler_, false, GetCurrentMeta()};
     txs.push_back(&tx);
     // add read only txid to freelist
 
@@ -272,7 +272,20 @@ private:
     }
   }
 
-  // [[nodiscard]] Meta GetCurrentMeta() noexcept {}
+  [[nodiscard]] Meta GetCurrentMeta() noexcept {
+    auto m0 = *even_meta_;
+    auto m1 = *odd_meta_;
+    if (m1.GetTxid() > m0.GetTxid()) {
+      std::swap(m1, m0);
+    }
+
+    // Use higher meta page if valid. Otherwise, fallback to previous, if valid.
+    if (!m1.Validate().has_value()) {
+      return m1;
+    } else {
+      return m0;
+    }
+  }
 
 private:
   struct Stats {
