@@ -188,10 +188,10 @@ private:
     return {};
   }
   std::optional<Error> InitNewDatabaseFile() noexcept {
-    PageBuffer buf{3, disk_handler_.PageSize()};
+    PageBuffer buf{4, disk_handler_.PageSize()};
 
-    auto &meta_p = buf.GetPage(META_PAGE_ID);
-    meta_p.SetId(META_PAGE_ID);
+    auto &meta_p = buf.GetPage(EVEN_META_PAGE_ID);
+    meta_p.SetId(EVEN_META_PAGE_ID);
     meta_p.SetFlags(PageFlag::MetaPage);
 
     auto &m = *meta_p.GetDataAs<Meta>();

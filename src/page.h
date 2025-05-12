@@ -18,9 +18,11 @@ namespace kv {
 constexpr std::size_t VERSION_NUMBER = 1;
 constexpr std::size_t MAGIC = 0xED0CDAED;
 
-constexpr Pgid META_PAGE_ID = 0;
-constexpr Pgid FREELIST_PAGE_ID = 1;
-constexpr Pgid BUCKET_PAGE_ID = 2;
+constexpr Pgid EVEN_META_PAGE_ID = 0;
+constexpr Pgid ODD_META_PAGE_ID = 1;
+constexpr Pgid FREELIST_PAGE_ID = 2;
+constexpr Pgid BUCKET_PAGE_ID = 3;
+constexpr Pgid INIT_WATERMARK = 4;
 constexpr std::size_t MIN_KEY_PER_PAGE = 2;
 
 enum class PageFlag : std::size_t {
@@ -313,7 +315,7 @@ public:
   void Write(Page &p) noexcept {
     // Page id is either going to be 0 or 1 which we can determine by the
     // transaction
-    p.SetId(META_PAGE_ID);
+    p.SetId(EVEN_META_PAGE_ID);
     LOG_INFO("tx meta page written to {}", p.Id());
     p.SetFlags(PageFlag::MetaPage);
 

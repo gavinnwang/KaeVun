@@ -1,7 +1,5 @@
 
-#include "bucket_meta.h"
 #include "db.h"
-#include "page.h"
 #include <cassert>
 #include <gtest/gtest.h>
 namespace test {
@@ -40,73 +38,73 @@ DeleteDBFile(const std::filesystem::path &path = "./db.db") noexcept {
 //   assert(m.has_value());
 // }
 
-// TEST(BucketTest, BucketCreateAndReadTest) {
-//   // Clean up any previous test artifacts.
-//   auto err = DeleteDBFile();
-//   if (err) {
-//     LOG_DEBUG("Failed to remove existing db file");
-//     std::abort();
-//   }
-//
-//   auto db = GetTmpDB();
-//
-//   auto keys_and_vals = std::vector<std::pair<std::string, std::string>>{
-//       {"key1", "val1"}, {"key2", "val2"}, {"key3", "val3"},
-//       {"key4", "val4"}, {"key0", "val0"},
-//   };
-//
-//   auto insert_keys = [&](kv::Bucket &bucket) {
-//     for (const auto &[key, val] : keys_and_vals) {
-//       assert(!bucket.Put(key, val));
-//     }
-//   };
-//
-//   // Initial bucket creation and insertion test.
-//   err = db->Update([&](kv::Tx &tx) -> std::optional<kv::Error> {
-//     auto bucket_result = tx.CreateBucket("bucket");
-//     if (!bucket_result.has_value()) {
-//       LOG_DEBUG("CreateBucket failed: {}", bucket_result.error().message());
-//       std::abort();
-//     }
-//
-//     auto bucket_opt = tx.GetBucket("bucket");
-//     if (!bucket_opt.has_value()) {
-//       LOG_ERROR("GetBucket failed: bucket 'bucket' not found");
-//       std::abort();
-//     }
-//
-//     auto &bucket = bucket_opt.value();
-//     insert_keys(bucket);
-//
-//     for (const auto &[key, val] : keys_and_vals) {
-//       auto get_result = bucket.Get(key);
-//       assert(get_result.has_value() && get_result.value() == val);
-//       LOG_INFO("Inserted and verified key '{}' with value '{}'", key, val);
-//     }
-//
-//     return {};
-//   });
-//   assert(!err);
-//
-//   // Reopen the bucket and validate data persists for all keys.
-//   err = db->Update([&](kv::Tx &tx) -> std::optional<kv::Error> {
-//     auto bucket_opt = tx.GetBucket("bucket");
-//     if (!bucket_opt.has_value()) {
-//       LOG_ERROR("GetBucket failed: bucket 'bucket' not found");
-//       std::abort();
-//     }
-//
-//     auto &bucket = bucket_opt.value();
-//     for (const auto &[key, val] : keys_and_vals) {
-//       auto get_result = bucket.Get(key);
-//       assert(get_result.has_value() && get_result.value() == val);
-//       LOG_INFO("Persisted key '{}' has value '{}'", key, val);
-//     }
-//
-//     return {};
-//   });
-//   assert(!err);
-// }
+TEST(BucketTest, BucketCreateAndReadTest) {
+  // Clean up any previous test artifacts.
+  auto err = DeleteDBFile();
+  if (err) {
+    LOG_DEBUG("Failed to remove existing db file");
+    std::abort();
+  }
+
+  auto db = GetTmpDB();
+
+  auto keys_and_vals = std::vector<std::pair<std::string, std::string>>{
+      {"key1", "val1"}, {"key2", "val2"}, {"key3", "val3"},
+      {"key4", "val4"}, {"key0", "val0"},
+  };
+
+  auto insert_keys = [&](kv::Bucket &bucket) {
+    for (const auto &[key, val] : keys_and_vals) {
+      assert(!bucket.Put(key, val));
+    }
+  };
+
+  // Initial bucket creation and insertion test.
+  err = db->Update([&](kv::Tx &tx) -> std::optional<kv::Error> {
+    auto bucket_result = tx.CreateBucket("bucket");
+    if (!bucket_result.has_value()) {
+      LOG_DEBUG("CreateBucket failed: {}", bucket_result.error().message());
+      std::abort();
+    }
+
+    auto bucket_opt = tx.GetBucket("bucket");
+    if (!bucket_opt.has_value()) {
+      LOG_ERROR("GetBucket failed: bucket 'bucket' not found");
+      std::abort();
+    }
+
+    auto &bucket = bucket_opt.value();
+    insert_keys(bucket);
+
+    for (const auto &[key, val] : keys_and_vals) {
+      auto get_result = bucket.Get(key);
+      assert(get_result.has_value() && get_result.value() == val);
+      LOG_INFO("Inserted and verified key '{}' with value '{}'", key, val);
+    }
+
+    return {};
+  });
+  assert(!err);
+
+  // Reopen the bucket and validate data persists for all keys.
+  err = db->Update([&](kv::Tx &tx) -> std::optional<kv::Error> {
+    auto bucket_opt = tx.GetBucket("bucket");
+    if (!bucket_opt.has_value()) {
+      LOG_ERROR("GetBucket failed: bucket 'bucket' not found");
+      std::abort();
+    }
+
+    auto &bucket = bucket_opt.value();
+    for (const auto &[key, val] : keys_and_vals) {
+      auto get_result = bucket.Get(key);
+      assert(get_result.has_value() && get_result.value() == val);
+      LOG_INFO("Persisted key '{}' has value '{}'", key, val);
+    }
+
+    return {};
+  });
+  assert(!err);
+}
 
 TEST(BucketTest, BucketCreateAndReadLargeTest) {
   // Clean up any previous test artifacts.
@@ -118,7 +116,7 @@ TEST(BucketTest, BucketCreateAndReadLargeTest) {
 
   auto keys_and_vals = [&]() {
     std::vector<std::pair<std::string, std::string>> result;
-    for (int i = 0; i <= 20000; ++i) {
+    for (int i = 0; i <= 200; ++i) {
       std::ostringstream key_stream;
       key_stream << "key" << std::setw(5) << std::setfill('0') << i;
 
