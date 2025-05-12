@@ -46,6 +46,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 file(GLOB_RECURSE SOURCE_FILES
     "${PROJECT_SOURCE_DIR}/src/*.cc"
 )
+# Exclude CLI from library sources
+list(REMOVE_ITEM SOURCE_FILES "${PROJECT_SOURCE_DIR}/src/cli.cc")
 
 message(STATUS "Compiling the following source files:")
 foreach(FILE ${SOURCE_FILES})
@@ -76,5 +78,10 @@ target_include_directories(kv PUBLIC "${PROJECT_SOURCE_DIR}/include")
 
 # Include directory
 # target_include_directories(kv PRIVATE "${PROJECT_SOURCE_DIR}/kv")
+
+# CLI executable target
+add_executable(kv_cli src/cli.cc)
+target_link_libraries(kv_cli PRIVATE kv fmt::fmt)
+target_include_directories(kv_cli PRIVATE "${PROJECT_SOURCE_DIR}/include")
 
 add_subdirectory(test)

@@ -246,10 +246,10 @@ private:
     std::string indent(depth * 2, ' ');
     if (page.Flags() & static_cast<std::size_t>(PageFlag::LeafPage)) {
       LeafPage &leaf = page.AsPage<LeafPage>();
-      LOG_INFO("{}LeafPage {}: {}", indent, pgid, leaf.ToString());
+      LOG_WARN("{}LeafPage {}: {}", indent, pgid, leaf.ToString());
     } else if (page.Flags() & static_cast<std::size_t>(PageFlag::BranchPage)) {
       BranchPage &branch = page.AsPage<BranchPage>();
-      LOG_INFO("{}BranchPage {}: {}", indent, pgid, branch.ToString());
+      LOG_WARN("{}BranchPage {}: {}", indent, pgid, branch.ToString());
       for (std::size_t i = 0; i < branch.Count(); ++i) {
         TraverseAndPrintPage(branch.GetPgid(i), depth + 1);
       }

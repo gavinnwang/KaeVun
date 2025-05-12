@@ -50,6 +50,7 @@ public:
     if (k != key) {
       return std::nullopt;
     }
+    LOG_WARN("got {}", v.ToString());
     return v;
   }
   [[nodiscard]] std::optional<Error> Put(const Slice &key,

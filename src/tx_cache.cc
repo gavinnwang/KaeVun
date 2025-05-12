@@ -83,8 +83,10 @@ ShadowPageHandler::Spill(Meta &meta, Buckets &buckets) noexcept {
 
       auto &p = p_or_err.value().get();
       n.Write(p);
+      LOG_DEBUG("{}", n.ToString());
 
       if (!n.GetParent().has_value() && n.GetPgid().has_value()) {
+        LOG_DEBUG("Node has no parent and has pgid updating root");
         buckets.UpdateRoot(n.GetPgid().value(), p.Id());
       }
 
