@@ -122,7 +122,8 @@ public:
 
     // Check if split is even needed
     if (n.GetElements().size() <= MIN_KEY_PER_PAGE * 2 ||
-        n.GetStorageSize() < disk_.PageSize()) {
+        n.GetStorageSize() < 200) {
+      // n.GetStorageSize() < disk_.PageSize()) {
       LOG_DEBUG("No split needed. Node has only {} elements and size {} bytes.",
                 n.GetElements().size(), n.GetStorageSize());
       return {};
@@ -132,24 +133,25 @@ public:
               n.GetElements().size(), n.GetStorageSize());
 
     std::vector<Node> nodes;
-    std::size_t threshold = disk_.PageSize() / 2;
+    std::size_t threshold = 100;
     std::size_t cur_size = PAGE_HEADER_SIZE;
-    Node cur_node;
+    Node cur_node{nullptr, n.IsLeaf()};
 
     std::size_t index = 0;
     for (const auto &e : n.GetElements()) {
-      std::size_t e_size = n.GetElementSize() + e.val_.Size() + e.key_.Size();
+      std::size_t e_size =
+          n.GetElementHeaderSize() + e.val_.Size() + e.key_.Size();
 
-      bool can_split = cur_node.GetElements().size() > MIN_KEY_PER_PAGE &&
-                       index < n.GetElements().size() - MIN_KEY_PER_PAGE &&
-                       cur_size + e_size > threshold;
+      bool can_split = cur_node.GetElements().size() >= MIN_KEY_PER_PAGE &&
+                       index <= n.GetElements().size() - MIN_KEY_PER_PAGE &&
+                       cur_size + e_size >= threshold;
 
       if (can_split) {
         LOG_DEBUG("Threshold reached. Finalizing current node with {} "
                   "elements, estimated size {} bytes.",
                   cur_node.GetElements().size(), cur_size);
         nodes.push_back(std::move(cur_node));
-        cur_node = Node{};
+        cur_node = Node{nullptr, n.IsLeaf()};
         cur_size = PAGE_HEADER_SIZE;
       }
 
@@ -167,6 +169,9 @@ public:
     nodes.push_back(std::move(cur_node));
 
     LOG_INFO("Splitting complete. Generated {} new node(s).", nodes.size());
+    for (const auto &n : nodes) {
+      LOG_DEBUG("node: {}", n.ToString());
+    }
     return nodes;
   }
 

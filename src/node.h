@@ -19,7 +19,7 @@ private:
     Slice val_;
   };
   std::vector<NodeElement> elements_;
-  bool is_leaf_;
+  bool is_leaf_ = true;
   std::size_t depth_{0};
   // The node has empty pgid if it is newly created and hasn't claimed a page id
   // yet todo
@@ -30,7 +30,8 @@ private:
   Slice parent_key_;
 
 public:
-  explicit Node(Node *parent = nullptr) noexcept : parent_(parent) {}
+  Node(Node *parent = nullptr, bool is_leaf = true) noexcept
+      : is_leaf_(is_leaf), parent_(parent) {}
   // prevent copying
   Node(const Node &) = delete;
   Node &operator=(const Node &) = delete;
@@ -134,13 +135,13 @@ public:
     return sz;
   }
 
-  [[nodiscard]] std::size_t GetElementSize() const noexcept {
+  [[nodiscard]] std::size_t GetElementHeaderSize() const noexcept {
     return (is_leaf_ ? sizeof(LeafElement) : sizeof(BranchElement));
   }
 
   [[nodiscard]] std::size_t GetHeaderSize() const noexcept {
     std::size_t header_size =
-        PAGE_HEADER_SIZE + elements_.size() * GetElementSize();
+        PAGE_HEADER_SIZE + elements_.size() * GetElementHeaderSize();
     return header_size;
   }
 
@@ -173,6 +174,10 @@ public:
   }
 
   [[nodiscard]] Node &Root() noexcept {
+    LOG_DEBUG("getting root");
+    if (parent_) {
+      LOG_DEBUG("parent {}", parent_->ToString());
+    }
     return parent_ ? parent_->Root() : *this;
   }
 
@@ -207,7 +212,11 @@ public:
 
   void SetPgid(Pgid pgid) noexcept { pgid_ = pgid; }
 
-  [[nodiscard]] std::vector<NodeElement> GetElements() const noexcept {
+  [[nodiscard]] std::vector<NodeElement> &GetElements() noexcept {
+    return elements_;
+  }
+
+  [[nodiscard]] const std::vector<NodeElement> &GetElements() const noexcept {
     return elements_;
   }
 };

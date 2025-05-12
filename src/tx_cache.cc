@@ -35,11 +35,12 @@ ShadowPageHandler::Spill(Meta &meta, Buckets &buckets) noexcept {
         if (n.GetPgid().has_value()) {
           LOG_DEBUG("pgid {}", n.GetPgid().value());
           old_roots.push_back(&n);
+          LOG_DEBUG("old root got {}", n.ToString());
         } else {
           LOG_DEBUG("node has no pgid weird");
         }
         LOG_DEBUG("created new root {}");
-        auto new_root = Node{nullptr};
+        auto new_root = Node{nullptr, false};
         nodes.push_back(&new_root);
         n.SetParent(&new_root);
         new_roots.push_back(std::move(new_root));
@@ -48,9 +49,7 @@ ShadowPageHandler::Spill(Meta &meta, Buckets &buckets) noexcept {
 
     if (new_nodes_opt.has_value()) {
       LOG_INFO("Node split into {} sub-nodes.", new_nodes_opt->size());
-      if (!n.GetParent().has_value()) { // node is root
-        // n.SetParent()
-      }
+      // assert(new_nodes_opt->size() > 1);
 
       for (std::size_t j = 0; j < new_nodes_opt->size(); j++) {
         auto &new_node = new_nodes_opt->at(j);
@@ -80,8 +79,10 @@ ShadowPageHandler::Spill(Meta &meta, Buckets &buckets) noexcept {
                     old_key.ToString(),
                     new_node.GetElements()[0].key_.ToString());
 
-          parent.value().get().Put(old_key, new_node.GetElements()[0].key_, {},
-                                   new_node.GetPgid().value());
+          auto &pn = parent.value().get();
+          pn.Put(old_key, new_node.GetElements()[0].key_, {},
+                 new_node.GetPgid().value());
+          LOG_DEBUG("parent after update {}", pn.ToString());
         }
       }
 
@@ -100,10 +101,11 @@ ShadowPageHandler::Spill(Meta &meta, Buckets &buckets) noexcept {
 
       auto &p = p_or_err.value().get();
       n.Write(p);
+      n.SetPgid(p.Id());
 
       if (!n.GetParent().has_value()) {
         if (n.GetPgid().has_value()) {
-          LOG_DEBUG("Node has no parent and has pgid");
+          LOG_DEBUG("Node has no parent and has pgid updating root");
           buckets.UpdateRoot(n.GetPgid().value(), p.Id());
         }
       }
@@ -123,6 +125,7 @@ ShadowPageHandler::Spill(Meta &meta, Buckets &buckets) noexcept {
   }
 
   for (auto *old_root : old_roots) {
+    LOG_DEBUG("old root{}", old_root->ToString());
     LOG_DEBUG("Updating bucket root from {} to {}", old_root->GetPgid().value(),
               old_root->Root().GetPgid().value());
     buckets.UpdateRoot(old_root->GetPgid().value(),
