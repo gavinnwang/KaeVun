@@ -138,9 +138,14 @@ protected:
 
 class LeafPage final : public ElementPage<LeafElement> {
 public:
+  LeafPage() = delete;
+  LeafPage(const LeafPage &) = delete;
+  LeafPage &operator=(const LeafPage &) = delete;
+  LeafPage(LeafPage &&) = delete;
+  LeafPage &operator=(LeafPage &&) = delete;
   ~LeafPage() = delete;
-  [[nodiscard]] Slice GetVal(std::size_t i) noexcept {
-    return {reinterpret_cast<std::byte *>(this) + elements_[i].offset_ +
+  [[nodiscard]] Slice GetVal(std::size_t i) const noexcept {
+    return {reinterpret_cast<const std::byte *>(this) + elements_[i].offset_ +
                 elements_[i].ksize_,
             elements_[i].vsize_};
   }
@@ -151,6 +156,32 @@ public:
       }
     }
     return -1; // key is less than all keys
+  }
+
+  [[nodiscard]] std::string ToString() const noexcept {
+    std::string result = "LeafPage[";
+    for (std::size_t i = 0; i < Count(); ++i) {
+      result += fmt::format("{{key: '{}', val: '{}'}}", GetKey(i).ToString(),
+                            GetVal(i).ToString());
+      if (i != Count() - 1) {
+        result += ", ";
+      }
+    }
+    result += "]";
+    return result;
+  }
+  // New verbose inspector
+  [[nodiscard]] std::string ToStringVerbose() const noexcept {
+    std::string result =
+        fmt::format("LeafPage(pgid: {}, count: {}) [\n", this->pgid_, Count());
+    for (std::size_t i = 0; i < Count(); ++i) {
+      const auto &e = elements_[i];
+      result +=
+          fmt::format("  {{ index: {}, offset: {}, ksize: {}, vsize: {} }}\n",
+                      i, e.offset_, e.ksize_, e.vsize_);
+    }
+    result += "]";
+    return result;
   }
 };
 

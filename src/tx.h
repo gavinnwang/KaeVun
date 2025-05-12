@@ -33,7 +33,7 @@ public:
 
   [[nodiscard]] std::optional<Error> Commit() noexcept {
     LOG_INFO("Transaction committing");
-    auto e = tx_handler_.Spill(meta_);
+    auto e = tx_handler_.Spill(meta_, buckets_);
     if (e) {
       return e;
     }

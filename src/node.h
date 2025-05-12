@@ -63,6 +63,7 @@ public:
   }
 
   void Read(Page &p) noexcept {
+    pgid_ = p.Id();
     is_leaf_ = (p.Flags() & static_cast<std::size_t>(PageFlag::LeafPage));
     elements_.resize(p.Count());
     for (std::size_t i = 0; i < p.Count(); i++) {
@@ -162,7 +163,7 @@ public:
   [[nodiscard]] std::pair<std::size_t, bool>
   FindFirstGreaterOrEqualTo(const Slice &key) const noexcept {
     for (std::size_t i = 0; i < elements_.size(); ++i) {
-      if (!(elements_[i].key_ < key)) { // i.e., elements_[i].key_ >= key
+      if (elements_[i].key_ >= key) { // i.e., elements_[i].key_ >= key
         bool exact = (elements_[i].key_ == key);
         return {i, exact};
       }

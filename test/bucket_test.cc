@@ -40,21 +40,36 @@ TEST(BucketTest, BucketsPageTest) {
   assert(m.has_value());
 }
 
-TEST(BucketTest, Test1) {
-  auto e = DeleteDBFile();
-  if (e) {
-    LOG_DEBUG("failed to remove db file");
+TEST(BucketTest, BucketCreateAndReadTest) {
+  // Clean up any previous test artifacts.
+  auto err = DeleteDBFile();
+  if (err) {
+    LOG_DEBUG("Failed to remove existing db file");
     std::abort();
   }
+
   auto db = GetTmpDB();
-  auto err = db->Update([](kv::Tx &tx) -> std::optional<kv::Error> {
+
+  auto insert_keys = [](kv::Bucket &bucket) {
+    for (const auto &[key, val] :
+         std::vector<std::pair<std::string, std::string>>{{"key1", "val1"},
+                                                          {"key2", "val2"},
+                                                          {"key3", "val3"},
+                                                          {"key4", "val4"},
+                                                          {"key0", "val0"}}) {
+      assert(!bucket.Put(key, val));
+    }
+  };
+
+  // Initial bucket creation and insertion test.
+  err = db->Update([&](kv::Tx &tx) -> std::optional<kv::Error> {
     auto bucket_result = tx.CreateBucket("bucket");
     if (!bucket_result.has_value()) {
       LOG_DEBUG("CreateBucket failed: {}", bucket_result.error().message());
-    } else {
-      LOG_DEBUG("CreateBucket success bucket root {}",
-                bucket_result.value().Root());
+      std::abort();
     }
+    LOG_DEBUG("CreateBucket success with root {}",
+              bucket_result.value().Root());
 
     auto bucket_opt = tx.GetBucket("bucket");
     if (!bucket_opt.has_value()) {
@@ -62,46 +77,30 @@ TEST(BucketTest, Test1) {
       std::abort();
     }
 
-    auto &b = bucket_opt.value(); // Safe now
-    auto e = b.Put("key1", "val1");
-    e = b.Put("key2", "val2");
-    e = b.Put("key3", "val3");
-    e = b.Put("key4", "val4");
-    e = b.Put("key0", "val0");
+    auto &bucket = bucket_opt.value();
+    insert_keys(bucket);
 
-    assert(!e);
+    auto get_result = bucket.Get("key1");
+    assert(get_result.has_value());
+    LOG_INFO("Retrieved key1 with value: {}", get_result.value().ToString());
 
-    auto slice_or_err = b.Get("key1");
-    LOG_INFO("return {}", slice_or_err.value().ToString());
     return {};
   });
   assert(!err);
-  err = db->Update([](kv::Tx &tx) -> std::optional<kv::Error> {
-    auto bucket_result = tx.CreateBucket("bucket");
-    if (!bucket_result.has_value()) {
-      LOG_DEBUG("CreateBucket failed: {}", bucket_result.error().message());
-    } else {
-      LOG_DEBUG("CreateBucket success bucket root {}",
-                bucket_result.value().Root());
-    }
 
+  // Reopen the bucket and validate data persists.
+  err = db->Update([&](kv::Tx &tx) -> std::optional<kv::Error> {
     auto bucket_opt = tx.GetBucket("bucket");
     if (!bucket_opt.has_value()) {
       LOG_ERROR("GetBucket failed: bucket 'bucket' not found");
       std::abort();
     }
 
-    auto &b = bucket_opt.value(); // Safe now
-    auto e = b.Put("key1", "val1");
-    e = b.Put("key2", "val2");
-    e = b.Put("key3", "val3");
-    e = b.Put("key4", "val4");
-    e = b.Put("key0", "val0");
+    auto &bucket = bucket_opt.value();
+    auto get_result = bucket.Get("key1");
+    assert(get_result.has_value() && get_result.value() == "val1");
+    LOG_DEBUG("got {}", get_result.value().ToString());
 
-    assert(!e);
-
-    auto slice_or_err = b.Get("key1");
-    LOG_INFO("return {}", slice_or_err.value().ToString());
     return {};
   });
   assert(!err);

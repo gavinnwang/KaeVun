@@ -64,14 +64,19 @@ private:
   // Get the key and value that the cursor is pointing at (should be a leaf
   // element)
   [[nodiscard]] std::pair<Slice, Slice> GetKeyValue() const noexcept {
+    LOG_INFO("getting key val");
     auto node = stack_.back();
     if (node.n_) {
       auto e = node.n_->GetElements()[node.index_];
       return {e.key_, e.val_};
     } else {
-      auto p = node.p_->GetDataAs<LeafPage>();
-      auto k = p->GetVal(node.index_);
-      auto v = p->GetVal(node.index_);
+      auto &p = node.p_->AsPage<LeafPage>();
+      LOG_INFO("hi: {} {} {} {}", static_cast<const void *>(&p), p.Id(),
+               p.ToStringVerbose(), p.ToString());
+      auto k = p.GetKey(node.index_);
+      auto v = p.GetVal(node.index_);
+      LOG_INFO("p {}, index {} got {} {}", p.ToString(), node.index_,
+               k.ToString(), v.ToString());
       return {k, v};
     }
   }
@@ -85,17 +90,18 @@ private:
     if (node.IsLeaf()) {
       LOG_INFO("is leaf pid: {}", node.p_->Id());
       if (node.n_) {
-        // LOG_INFO("node : {}", node.n_->ToString());
+        LOG_INFO("node : {}", node.n_->ToString());
         auto [index, _] = node.n_->FindFirstGreaterOrEqualTo(key);
         index_ = index;
-        // LOG_INFO("node : {}, index: {}, search key: {}", node.n_->ToString(),
-        //          index_, key.ToString());
+        LOG_INFO("node : {}, index: {}, search key: {}", node.n_->ToString(),
+                 index_, key.ToString());
         node.index_ = index_;
       } else {
         auto &p = node.p_->AsPage<LeafPage>();
-        // LOG_INFO("hi: {}", node.p_->Id());
+        LOG_INFO("hi: {} {} {} {}", static_cast<const void *>(&p), p.Id(),
+                 p.ToStringVerbose(), p.ToString());
         index_ = p.FindLastLessThan(key) + 1;
-        // LOG_INFO("index: {}", index_);
+        LOG_INFO("index: {}", index_);
         node.index_ = index_;
       }
     } else {

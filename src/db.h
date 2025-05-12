@@ -145,7 +145,7 @@ public:
     // });
 
     auto err_opt = fn(tx);
-    if (err_opt) {
+    if (err_opt.has_value()) {
       LOG_INFO("User function caused error, rolling back transaction.");
       tx.Rollback();
     } else {

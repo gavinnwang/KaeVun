@@ -1,6 +1,7 @@
 #pragma once
 
 #include "cursor.h"
+#include "log.h"
 #include "page.h"
 #include "persist.h"
 #include "type.h"
@@ -79,6 +80,22 @@ public:
 
   // Size returns the number of buckets.
   [[nodiscard]] std::size_t Size() const noexcept { return buckets_.size(); }
+
+  // Updates bucket metadata if the current bucket's root matches the given
+  // old_id.
+  //
+  // This function ensures the bucket's root pointer stays consistent with the
+  // latest tree structure, particularly after splitting the root or
+  // rebalancing.
+  void UpdateRoot(Pgid old_id, Pgid new_id) noexcept {
+    for (auto &[name, meta] : buckets_) {
+      if (meta.Root() == old_id) {
+        LOG_DEBUG("Bucket '{}' root updated from {} to {}", name, old_id,
+                  new_id);
+        meta.SetRoot(new_id);
+      }
+    }
+  }
 
   [[nodiscard]] std::optional<std::reference_wrapper<const BucketMeta>>
   GetBucket(const std::string &name) const noexcept {

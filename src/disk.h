@@ -78,6 +78,7 @@ public:
              id);
 
     auto &p = *reinterpret_cast<Page *>(GetAddress(pos));
+    assert(p.Id() == id);
     p.AssertMagic();
     return p;
   }

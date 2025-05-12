@@ -8,6 +8,7 @@ public:
   explicit BucketMeta(Pgid root) : root_(root) {}
 
   [[nodiscard]] Pgid Root() const noexcept { return root_; }
+  void SetRoot(Pgid id) noexcept { root_ = id; }
 
 private:
   Pgid root_;
