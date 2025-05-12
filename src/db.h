@@ -49,20 +49,19 @@ public:
         db->Close();
         return std::unexpected{*err_opt};
       }
-    } else {
-      // check the file to detect corruption
-      LOG_INFO("Checking file to detect corruption.");
-      auto err_opt = db->Validate();
-      if (err_opt.has_value()) {
-        LOG_ERROR("Validation failed {}", err_opt->message());
-        db->Close();
-        return std::unexpected{*err_opt};
-      }
     }
 
     // set up meta* reference
     db->Init();
-    assert(db->meta_);
+    assert(db->even_meta_);
+    // check the file to detect corruption
+    LOG_INFO("Checking file to detect corruption.");
+    auto err_opt = db->Validate();
+    if (err_opt.has_value()) {
+      LOG_ERROR("Validation failed {}", err_opt->message());
+      db->Close();
+      return std::unexpected{*err_opt};
+    }
     // auto err_opt = db->meta_->Validate();
     // if (err_opt.has_value()) {
     //   LOG_ERROR("Validation failed {}", err_opt->message());
@@ -105,7 +104,7 @@ public:
       return std::unexpected{Error{"DB not opened"}};
     // Tx takes in a copy of the db meta
     LOG_DEBUG("---Creating transaction---");
-    Tx tx{disk_handler_, true, *meta_};
+    Tx tx{disk_handler_, true, *even_meta_};
     txs.push_back(&tx);
     rwtx_ = &tx;
 
@@ -117,7 +116,7 @@ public:
     std::lock_guard metalock(metalock_);
     if (!opened_)
       return std::unexpected{Error{"DB not opened"}};
-    Tx tx{disk_handler_, false, *meta_};
+    Tx tx{disk_handler_, false, *even_meta_};
     txs.push_back(&tx);
     // add read only txid to freelist
 
@@ -183,10 +182,15 @@ private:
   // Initialize the internal fields of the db
   std::optional<Error> Init() noexcept {
     LOG_DEBUG("Initializing database");
-    meta_ = disk_handler_.GetPageFromMmap(0).GetDataAs<Meta>();
-    LOG_DEBUG("{}", meta_->ToString());
+    even_meta_ =
+        disk_handler_.GetPageFromMmap(EVEN_META_PAGE_ID).GetDataAs<Meta>();
+    odd_meta_ =
+        disk_handler_.GetPageFromMmap(ODD_META_PAGE_ID).GetDataAs<Meta>();
+    LOG_DEBUG("{}", even_meta_->ToString());
+    LOG_DEBUG("{}", odd_meta_->ToString());
     return {};
   }
+
   std::optional<Error> InitNewDatabaseFile() noexcept {
     PageBuffer buf{4, disk_handler_.PageSize()};
 
@@ -204,6 +208,20 @@ private:
     m.SetTxid(0);
     m.SetChecksum(m.Sum64());
 
+    auto &o_meta_p = buf.GetPage(ODD_META_PAGE_ID);
+    o_meta_p.SetId(ODD_META_PAGE_ID);
+    o_meta_p.SetFlags(PageFlag::MetaPage);
+
+    m = *o_meta_p.GetDataAs<Meta>();
+    m.SetMagic(MAGIC);
+    m.SetVersion(VERSION_NUMBER);
+    m.SetPageSize(disk_handler_.PageSize());
+    m.SetFreelist(FREELIST_PAGE_ID);
+    m.SetBuckets(BUCKET_PAGE_ID);
+    m.SetWatermark(3); // highest page id in use
+    m.SetTxid(1);
+    m.SetChecksum(m.Sum64());
+
     auto &freelist_p = buf.GetPage(FREELIST_PAGE_ID);
     freelist_p.SetId(FREELIST_PAGE_ID);
     freelist_p.SetFlags(PageFlag::FreelistPage);
@@ -211,10 +229,6 @@ private:
     auto &bucket_p = buf.GetPage(BUCKET_PAGE_ID);
     bucket_p.SetId(BUCKET_PAGE_ID);
     bucket_p.SetFlags(PageFlag::BucketPage);
-
-    // auto &leaf_p = buf.GetPage(3);
-    // leaf_p.SetId(3);
-    // leaf_p.SetFlags(PageFlag::LeafPage);
 
     auto e = disk_handler_.WritePageBuffer(buf, 0);
     if (e.has_value()) {
@@ -258,6 +272,8 @@ private:
     }
   }
 
+  // [[nodiscard]] Meta GetCurrentMeta() noexcept {}
+
 private:
   struct Stats {
     // total number of started read tx
@@ -282,6 +298,7 @@ private:
   // write tx
   Tx *rwtx_;
   // Meta
-  Meta *meta_;
+  Meta *even_meta_;
+  Meta *odd_meta_;
 };
 } // namespace kv
