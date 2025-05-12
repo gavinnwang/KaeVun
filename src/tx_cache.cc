@@ -101,7 +101,6 @@ ShadowPageHandler::Spill(Meta &meta, Buckets &buckets) noexcept {
 
       auto &p = p_or_err.value().get();
       n.Write(p);
-      n.SetPgid(p.Id());
 
       if (!n.GetParent().has_value()) {
         if (n.GetPgid().has_value()) {
@@ -109,7 +108,7 @@ ShadowPageHandler::Spill(Meta &meta, Buckets &buckets) noexcept {
           buckets.UpdateRoot(n.GetPgid().value(), p.Id());
         }
       }
-      // n.SetPgid(p.Id());
+      n.SetPgid(p.Id());
 
       LOG_DEBUG("Node written to page {}.", p.Id());
 
