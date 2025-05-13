@@ -1,7 +1,7 @@
-
 #include "db.h"
 #include <cassert>
 #include <gtest/gtest.h>
+
 namespace test {
 
 [[nodiscard]] kv::DB::RAII_DB

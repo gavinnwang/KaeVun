@@ -134,6 +134,7 @@ public:
     p.SetCount(buckets_.size());
     Serializer s{p.Data()};
     for (const auto &[name, b] : buckets_) {
+      LOG_DEBUG("writing {} {}", name, b.Root());
       s.Write(name);
       s.Write(b.Root());
     }

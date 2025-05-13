@@ -64,7 +64,7 @@ public:
   }
 
   // Write any dirty pages to disk.
-  [[nodiscard]] std::optional<Error> Write() noexcept {
+  [[nodiscard]] std::optional<Error> WriteDirtyPages() noexcept {
     LOG_INFO("Starting Write: flushing {} dirty shadow pages to disk.",
              shadow_pages_.size());
 

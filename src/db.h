@@ -147,6 +147,7 @@ public:
     if (err_opt.has_value()) {
       LOG_INFO("User function caused error, rolling back transaction.");
       tx.Rollback();
+      return err_opt.value();
     } else {
       LOG_INFO("User function caused no error.");
     }
@@ -186,41 +187,42 @@ private:
         disk_handler_.GetPageFromMmap(EVEN_META_PAGE_ID).GetDataAs<Meta>();
     odd_meta_ =
         disk_handler_.GetPageFromMmap(ODD_META_PAGE_ID).GetDataAs<Meta>();
-    LOG_DEBUG("{}", even_meta_->ToString());
-    LOG_DEBUG("{}", odd_meta_->ToString());
+    LOG_DEBUG("yo {}", even_meta_->ToString());
+    LOG_DEBUG("yo {}", odd_meta_->ToString());
     return {};
   }
 
   std::optional<Error> InitNewDatabaseFile() noexcept {
+    LOG_INFO("InitNewDatabaseFile");
     PageBuffer buf{4, disk_handler_.PageSize()};
 
     auto &meta_p = buf.GetPage(EVEN_META_PAGE_ID);
     meta_p.SetId(EVEN_META_PAGE_ID);
     meta_p.SetFlags(PageFlag::MetaPage);
 
-    auto &m = *meta_p.GetDataAs<Meta>();
-    m.SetMagic(MAGIC);
-    m.SetVersion(VERSION_NUMBER);
-    m.SetPageSize(disk_handler_.PageSize());
-    m.SetFreelist(FREELIST_PAGE_ID);
-    m.SetBuckets(BUCKET_PAGE_ID);
-    m.SetWatermark(3); // highest page id in use
-    m.SetTxid(0);
-    m.SetChecksum(m.Sum64());
+    auto &m_even = *meta_p.GetDataAs<Meta>();
+    m_even.SetMagic(MAGIC);
+    m_even.SetVersion(VERSION_NUMBER);
+    m_even.SetPageSize(disk_handler_.PageSize());
+    m_even.SetFreelist(FREELIST_PAGE_ID);
+    m_even.SetBuckets(BUCKET_PAGE_ID);
+    m_even.SetWatermark(3);
+    m_even.SetTxid(0);
+    m_even.SetChecksum(m_even.Sum64());
 
     auto &o_meta_p = buf.GetPage(ODD_META_PAGE_ID);
     o_meta_p.SetId(ODD_META_PAGE_ID);
     o_meta_p.SetFlags(PageFlag::MetaPage);
 
-    m = *o_meta_p.GetDataAs<Meta>();
-    m.SetMagic(MAGIC);
-    m.SetVersion(VERSION_NUMBER);
-    m.SetPageSize(disk_handler_.PageSize());
-    m.SetFreelist(FREELIST_PAGE_ID);
-    m.SetBuckets(BUCKET_PAGE_ID);
-    m.SetWatermark(3); // highest page id in use
-    m.SetTxid(1);
-    m.SetChecksum(m.Sum64());
+    auto &m_odd = *o_meta_p.GetDataAs<Meta>();
+    m_odd.SetMagic(MAGIC);
+    m_odd.SetVersion(VERSION_NUMBER);
+    m_odd.SetPageSize(disk_handler_.PageSize());
+    m_odd.SetFreelist(FREELIST_PAGE_ID);
+    m_odd.SetBuckets(BUCKET_PAGE_ID);
+    m_odd.SetWatermark(3);
+    m_odd.SetTxid(1);
+    m_odd.SetChecksum(m_odd.Sum64());
 
     auto &freelist_p = buf.GetPage(FREELIST_PAGE_ID);
     freelist_p.SetId(FREELIST_PAGE_ID);
@@ -239,13 +241,10 @@ private:
 
   [[nodiscard]] std::optional<Error> Validate() noexcept {
     // Validate the meta
-    auto buf_or_err = disk_handler_.CreatePageBufferFromDisk(0, 1);
-    if (!buf_or_err) {
-      return buf_or_err.error();
+    if (even_meta_->Validate() && odd_meta_->Validate()) {
+      return Error{"both meta invalid"};
     }
-    auto &p = buf_or_err->GetPage(0);
-
-    return p.GetDataAs<Meta>()->Validate();
+    return std::nullopt;
   }
 
   /// Recursively print all pages starting from the given page id.
@@ -275,14 +274,16 @@ private:
   [[nodiscard]] Meta GetCurrentMeta() noexcept {
     auto m0 = *even_meta_;
     auto m1 = *odd_meta_;
-    if (m1.GetTxid() > m0.GetTxid()) {
-      std::swap(m1, m0);
+    LOG_DEBUG("m1 {}, m0 {}", m1.ToString(), m0.ToString());
+    if (m1.GetTxid() < m0.GetTxid()) {
+      std::swap(m0, m1);
     }
 
     // Use higher meta page if valid. Otherwise, fallback to previous, if valid.
     if (!m1.Validate().has_value()) {
       return m1;
     } else {
+      LOG_ERROR("m1 meta not valid");
       return m0;
     }
   }

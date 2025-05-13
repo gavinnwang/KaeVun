@@ -317,6 +317,7 @@ public:
     // Page id is either going to be 0 or 1 which we can determine by the
     // transaction
     p.SetId(txid_ % 2);
+    LOG_DEBUG("{}", ToString());
     LOG_INFO("tx meta page written to {}", p.Id());
     p.SetFlags(PageFlag::MetaPage);
 
@@ -335,6 +336,7 @@ public:
     if (magic_ == MAGIC && version_ == VERSION_NUMBER && checksum_ == Sum64()) {
       return std::nullopt;
     }
+    std::abort();
     return Error{"Meta validation failed"};
   }
 };

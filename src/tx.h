@@ -3,6 +3,7 @@
 #include "bucket.h"
 #include "disk.h"
 #include "error.h"
+#include "log.h"
 #include "page.h"
 #include "tx_cache.h"
 #include <expected>
@@ -17,8 +18,11 @@ public:
       : open_(true), disk_(disk), tx_handler_(disk, writable),
         writable_(writable), meta_(db_meta),
         buckets_(Buckets{disk.GetPageFromMmap(meta_.GetBuckets())}) {
+    LOG_DEBUG("tx got meta {}", meta_.ToString());
     if (writable_) {
+      LOG_DEBUG("incrementing txid ");
       meta_.IncrementTxid();
+      LOG_DEBUG("txid: {}", meta_.GetTxid());
     }
   };
 
@@ -48,7 +52,7 @@ public:
     meta_.SetBuckets(p.Id());
 
     // Writing all dirty pages to disk.
-    e = tx_handler_.Write();
+    e = tx_handler_.WriteDirtyPages();
     if (e) {
       return e;
     }
