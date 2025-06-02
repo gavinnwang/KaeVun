@@ -46,8 +46,6 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 file(GLOB_RECURSE SOURCE_FILES
     "${PROJECT_SOURCE_DIR}/src/*.cc"
 )
-# Exclude CLI from library sources
-list(REMOVE_ITEM SOURCE_FILES "${PROJECT_SOURCE_DIR}/src/cli.cc")
 
 message(STATUS "Compiling the following source files:")
 foreach(FILE ${SOURCE_FILES})

@@ -4,7 +4,6 @@
 #include "type.h"
 #include <algorithm>
 #include <cassert>
-#include <cstdint>
 #include <unordered_map>
 #include <vector>
 namespace kv {
